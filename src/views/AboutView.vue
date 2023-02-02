@@ -18,7 +18,7 @@
     list:[]
   })
   const getweathers=()=>{
-    axios.get("/server/GetWeather").then((res)=>{
+    axios.get(`/server/GetWeather`).then((res)=>{
       console.log(res.data)
       weathers.list=res.data
     })
