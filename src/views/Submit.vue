@@ -92,21 +92,21 @@
 </template>
 
 <script lang="ts" setup>
-import { reactive, ref, watch } from "vue"
 import axios from "axios"
-import { ElMessage, ElMessageBox } from "element-plus"
-import type { UploadProps, UploadUserFile } from "element-plus"
+import CryptoJS from "crypto-js"
+import { ElMessage } from "element-plus"
+import { reactive, ref, watch } from "vue"
 import { forEach, isUndefined } from "lodash"
 import { Check, Plus, Upload } from "@element-plus/icons-vue"
-import CryptoJS from "crypto-js"
+import type { UploadProps, UploadUserFile } from "element-plus"
 
 let ready = 0
 let adding = 0
 let loadaborted = false //to be done 计算文件哈希时切换模式
-const fileList = ref<UploadUserFile[]>([])
-const shown = ref(0)
 const mode = ref("")
+const fileList = ref<UploadUserFile[]>([])
 const shas: string[] = []
+const shown = ref(0)
 const loading = ref(false)
 const loadprogress = ref(0)
 const started = ref(false)
@@ -207,7 +207,6 @@ const handleError: UploadProps["onError"] = (error, file, uploadFiles) => {
 }
 
 const submitUpload = () => {
-  console.log("点击了上传按钮")
   if (mode.value === "") {
     ElMessage.warning("请先选择检测模式")
     return
@@ -274,7 +273,7 @@ const uploadOne = async (i: number, extra: extradata[] = []) => {
         fd.append(e.name, e.value)
       })
     }
-    const res = await axios.post(`/server/UploadFile/${form.mode}`, fd, {
+    const res = await axios.post(`/server/UploadFile/${mode.value}`, fd, {
       headers: {
         "Content-Type": "multipart/form-data",
       },
@@ -282,14 +281,13 @@ const uploadOne = async (i: number, extra: extradata[] = []) => {
     if (res.status !== 200) return Promise.reject("error")
     fileList.value[i].percentage = 100
     fileList.value[i].status = "success"
-    ready--
-    console.log(res.data)
     return res.data
   } catch (e) {
     fileList.value[i].percentage = 0
     fileList.value[i].status = "fail"
-    ready--
     ElMessage.error(e?.toString())
+  } finally {
+    ready--
   }
 }
 
@@ -327,27 +325,27 @@ const uploadSlices = async () => {
   //const
   if (ready === 0) return
   try {
+    const file = fileList.value[0].raw as File
     if (form.guid === "") {
-      const res = await axios.get("/server/GetGuid")
+      const res = await axios.get(`/server/GetGuid/${mode.value}/${file.name}`)
       if (res.status !== 200) return Promise.reject("error")
       form.guid = res.data
     }
+    let i = 0
+    const slicesize = 4194304
+    const total = isUndefined(fileList.value[0].size) ? 0 : fileList.value[0].size
+    let start = 0,
+      end = 0
+    while (start < total) {
+      if (start + slicesize < total) end = start + slicesize
+      else end = total
+      const slice = file.slice(start, end)
+      const sha = getFileSHAProgressive(slice, false)
+
+      start = end
+    }
   } catch (e) {
     ElMessage.error(e?.toString())
-  }
-  let i = 0
-  const file = fileList.value[0].raw as File
-  const slicesize = 4194304
-  const total = isUndefined(fileList.value[0].size) ? 0 : fileList.value[0].size
-  let start = 0,
-    end = 0
-  while (start < total) {
-    if (start + slicesize < total) end = start + slicesize
-    else end = total
-    const slice = file.slice(start, end)
-    const sha = getFileSHAProgressive(slice,false)
-    
-    start = end
   }
 }
 
@@ -363,7 +361,7 @@ const getFileSHAProgressive = async (file: Blob, update: boolean = true) => {
     const slice = file.slice(start, end)
     const arraybuffer = await slice.arrayBuffer()
     sha256.update(CryptoJS.lib.WordArray.create(arraybuffer))
-    if(update)updateLoadProgress(loadprogress.value + ((end - start) / total / adding) * 100)
+    if (update) updateLoadProgress(loadprogress.value + ((end - start) / total / adding) * 100)
     start = end
   }
   return sha256.finalize().toString()

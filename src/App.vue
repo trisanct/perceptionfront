@@ -1,13 +1,11 @@
 <script setup lang="ts">
-import { RouterLink, RouterView } from 'vue-router'
-import Menu from './components/Menu.vue'
+import { RouterLink, RouterView } from "vue-router"
+import Menu from "./components/Menu.vue"
 </script>
 
 <template>
   <div><Menu /></div>
-  <div style="margin-top:10px"><RouterView /></div>
+  <div style="margin-top: 10px"><RouterView /></div>
 </template>
 
-<style scoped>
-
-</style>
+<style scoped></style>

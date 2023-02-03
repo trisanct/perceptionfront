@@ -1,26 +1,23 @@
 <template>
   <div class="about">
     <h1>This is a test page</h1>
-    <el-button @click="getweathers">获取天气情况</el-button>
-    <br/>
-    <li v-for="{date, temperatureC, summary} in weathers.list">
-      <ul>{{formatDate(date)}}</ul>
-      <ul>{{temperatureC}}</ul>
-      <ul>{{summary}}</ul>
-    </li>
+    <el-button @click="hello">测试服务器是否连通</el-button>
+    <h2>{{}}</h2>
+		
 		
   </div>
 </template>
 <script setup lang="ts">
   import axios from "axios"
-  import { reactive } from "vue";
-  const weathers=reactive({
-    list:[]
-  })
-  const getweathers=()=>{
-    axios.get(`/server/GetWeather`).then((res)=>{
-      console.log(res.data)
-      weathers.list=res.data
+  import { ref } from "vue";
+	const msg=ref('')
+  const hello=()=>{
+    axios.get(`/server/Hello`,  { data:{
+			a:'2'
+		}
+
+		}).then((res)=>{
+			msg.value=res.data
     })
   }
   function formatDate(s: string) {
