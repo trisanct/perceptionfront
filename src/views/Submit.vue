@@ -4,13 +4,13 @@
 		<el-card class="box-card">
 			<el-form :model="form">
 				<el-form-item label="检测模式">
-					<el-select style="margin-right:10px" v-model="form.mode" placeholder="请选择检测模式" @change="onSelectChange">
+					<el-select style="margin-right:10px" v-model="form.mode" placeholder="请选择检测模式" :disabled="started" @change="onSelectChange">
 						<el-option label="predict" value="predict" />
 						<el-option label="video" value="video" />
 						<el-option label="fps" value="fps" />
-						<el-option label="dir_predict" value="dir_predict" />
+						<el-option label="directory" value="directory" />
 					</el-select>
-					仅当选择dir_predict模式时可上传多个文件
+					选择directory模式可上传多个文件, 选择video或fps模式可上传大于20MB的文件
 				</el-form-item>
 				<el-form-item style="display:none">
 					<el-input v-model="form.guid" />
@@ -30,9 +30,6 @@
 				<el-form-item label="参数3">
 					<el-input v-model="form.param3" />
 				</el-form-item>
-				<el-form-item>
-					<el-button type="success" :icon="Check" @click="onSubmit">提交</el-button>
-				</el-form-item>
 			</el-form>
   	</el-card>
 		
@@ -46,36 +43,32 @@
 								:show-file-list=false
 								:auto-upload=false
 								action="/"
-								:multiple="form.mode==='dir_predict'"
-								:limit="form.mode==='dir_predict'?undefined:1"
+								:multiple="form.mode==='directory'"
+								:limit="form.mode==='directory'?undefined:1"
 								:on-exceed="handleExceed"
 								:on-error="handleError"
+								:disabled="loading"
 								>
 						<!-- <template #trigger> -->
-							<el-button style="margin-left:12px" type="primary" :icon="Plus">选择文件</el-button>
+							<el-button style="margin-left:12px" type="primary" :icon="Plus" :loading="loading">
+								{{loading?loadprogress.toString().slice(0,5)+'%':'选择文件'}}
+							</el-button>
 						<!-- </template> -->
 					</el-upload>
-					<el-button style="margin-left:12px" type="success" :icon="Upload" @click="submitUpload">
+					<el-button style="margin-left:12px" type="success" :icon="Upload" :loading="loading" @click="submitUpload">
 									开始上传
-						</el-button>
+					</el-button>
 				</div>
 			</template>
-			<el-button type="primary" @click="makesuccess">
-				强行完成
-			</el-button>
-			<el-button type="primary" @click="makehalf">
-				强行一半
-			</el-button>
-			<el-button type="primary" @click="onclicksha1">
-				计算SHA1
-			</el-button>
 			<div v-for="(file,index) in fileList" :key="index">
-				<el-card shadow="hover" class="fileblock">
-					{{file.name}} {{isUndefined(file.size)?0:countSize(file.size)}}
-					<input type="button" value="移除" @click="handleRemove(index)" />
+				<el-card v-if="index<shown" shadow="hover" class="fileblock">
+					{{file.name}} &nbsp; {{countSize(file.size)}} &nbsp;&nbsp;
+					<el-button type="danger"  @click="handleRemove(index)" >移除</el-button>
 					<el-progress :percentage="file.percentage" :status="file.percentage===100?'success':undefined" />
 				</el-card>
 			</div>
+			<br/>
+			<el-button type="success" :icon="Check" @click="onSubmit">提交</el-button>
 		</el-card>
   </div>
 </template>
@@ -86,32 +79,51 @@
 	import axios from 'axios'
   import { ElMessage, ElMessageBox } from 'element-plus'
   import type { UploadProps, UploadUserFile } from 'element-plus'
-	import { forEach, isUndefined } from 'lodash'
+	import { forEach, isUndefined, slice } from 'lodash'
 	import { Check, Plus, Upload } from '@element-plus/icons-vue'
 	import CryptoJS from 'crypto-js'
 	//vars
 	
-	let md5:string =''
 	let ready=0
 	//refs
   const fileList = ref<UploadUserFile[]>([])
-	const shas= ref<string[]>([])
-	watch(fileList,async (a,b)=>{
+	const shown = ref(0)
+	const shas: string[] = ([])
+	const loading = ref(false)
+	const loadprogress = ref(0)
+	const started = ref(false)
+	//const slices:Blob[] = []
+	let adding = 0
+	watch(fileList,async (a,b) => {
 		if(a.length>b.length) {
-			console.log('new',a)
-			console.log('old',b)
-			console.log('now',fileList.value)
-			console.log('now',shas.value)
-			const f=a[a.length-1]
-			const fsha = (await getFileSHA(f.raw as File)) as string
-			if(shas.value.includes(fsha)) {
-				fileList.value.pop()
-				ElMessage.warning('请勿添加相同文件')
+			loading.value=true
+			loadprogress.value=0
+			adding=a.length-b.length
+			let i=b.length
+			while(i<a.length) {
+				if(form.mode!=='video'&&form.mode!=='fps'&&typeof a[i].size!=='undefined') {
+					if(a[i].size as number>20*1048576) {
+						fileList.value.splice(i,1)
+						ElMessage.warning('请选择小于20MB的文件')
+						break
+					}
+				}
+				const fsha = (await getFileSHA(a[i].raw as File)) as string
+				console.log(fsha)
+				if(shas.includes(fsha)) {
+					fileList.value.splice(i,1)
+					ElMessage.warning('请勿添加相同文件')
+				}
+				else {
+					shas.push(fsha)
+					shown.value++
+					ready++
+					i++
+				}
 			}
-			else {
-				shas.value.push(fsha)
-				ready++
-			}
+			loading.value=false
+			loadprogress.value=100
+			adding=0;
 		}
 	})
   const form = reactive({
@@ -125,7 +137,7 @@
   })
 	//events
 	const handleExceed: UploadProps['onExceed'] = (files, uploadFiles) => {
-		ElMessage.warning('非dir_predict模式只能上传单个文件')
+		ElMessage.warning('非directory模式不能添加多个文件')
 	}
 
 	const handleRemove = (i:number) => {
@@ -135,7 +147,9 @@
 		}
 		if(fileList.value[i].status==='ready')ready--
 		fileList.value.splice(i,1)
-		shas.value.splice(i,1)
+		shown.value--
+		shas.splice(i,1)
+		//if(shown.value===0)slices.splice(0,slices.length)
 	}
 	
 	const handleError: UploadProps['onError'] = (error, file, uploadFiles) => {
@@ -153,49 +167,41 @@
 			ElMessage.warning('请先选择要上传的文件')
 			return;
 		}
-		if(form.mode==='predict'){                  //单传
-			//uploadSmall()
+		if(form.mode==='predict') {                  //单传
 			uploadFile()
 			return
 		}
-		if(form.mode==='video'||form.mode==='fps'){ //切传
+		if(form.mode==='video'||form.mode==='fps') { //切传
 			uploadSlices()
 			return
 		}
-		if(form.mode==='dir_predict'){              //多传
-			//uploadSmalls()
+		if(form.mode==='directory') {                //多传
 			uploadFiles()
 			return
 		}
 		ElMessage.error('出错啦')
 	}
-
-	const makesuccess = () => {
-		forEach(fileList.value,(f)=>{
-			f.status='success',
-			f.percentage=100
-		})
-	}
-
-	const makehalf = () => {
-		forEach(fileList.value,(f)=>{
-			f.status='uploading',
-			f.percentage=50
-		})
-	}
-
-	const onclicksha1 = async () => {
-		console.log('点击sha1')
-		const sha=(await getFileSHA(fileList.value[0].raw as File)) as string
-		console.log(sha)
-	}
 	
   const onSelectChange = () => {
-		form.guid=''                   //改变模式清空guid
-		if(form.mode!=='dir_predict')
-			if(fileList.value.length>1)  //从dir模式切换至其他模式，移除多余文件
+		form.guid=''                     //改变模式清空guid
+		if(form.mode!=='directory') {
+			if(fileList.value.length>1) {  //从dir模式切换至其他模式，移除多余文件
+				ElMessage.warning(`${fileList.value[0].name}之后的文件因切换至非diretory模式被自动移除`)
 				fileList.value.splice(1,fileList.value.length-1)
-		
+				shas.splice(1,fileList.value.length-1)
+				shown.value=1
+			}
+		}
+		if(form.mode!=='video'&&form.mode!=='fps') {
+			if(fileList.value.length>0) {
+				if((isUndefined(fileList.value[0].size)?0:fileList.value[0].size)>20*1048576) {
+					ElMessage.warning(`文件${fileList.value[0].name}因超出20MB被自动移除`)
+					fileList.value.splice(1,fileList.value.length-1)
+					shas.splice(1,fileList.value.length-1)
+					shown.value=0
+				}
+			}
+		}
   }
 	
   const onSubmit = () => {  //to be done
@@ -203,7 +209,8 @@
   }
 
 	//functions
-	const countSize= (bytes:number) => {
+	const countSize = (bytes:any) => {
+			if (typeof bytes !== 'number') return "0B";
       if (bytes === 0) return "0B";
       let k = 1024,
         sizes = ["B", "KB", "MB", "GB", "TB"],
@@ -219,7 +226,7 @@
 			fileList.value[i].status='uploading'
 			const fd=new FormData()
 			fd.append('file',fileList.value[i].raw as File)
-			fd.append('sha',shas.value[i])
+			fd.append('sha',shas[i])
 			if(extra.length!==0)	{
 				forEach(extra,(e)=>{
 					fd.append(e.name,e.value)
@@ -246,6 +253,7 @@
 
 	const uploadFile = async () => {
 		if(fileList.value[0].status==="ready") {
+			started.value=true
 			form.guid=await uploadOne(0)
 		}
 	}
@@ -253,6 +261,7 @@
 	const uploadFiles = async () => {
 		if(ready===0)return;
 		try{
+			started.value=true
 			if(form.guid==='') {
 				const res=(await axios.get('/server/GetGuid'))
 				if(res.status!==200) return Promise.reject('error')
@@ -271,61 +280,35 @@
 			i++
 		}
 	}
-
-	// const uploadOnce = async (indexes:number[]) => {
-	// 	try {
-	// 		const fd=new FormData()
-	// 		forEach(indexes,(i)=>{
-	// 			fd.append('file',fileList.value[i].raw as File)
-	// 			fd.append('index',i.toString())
-	// 		})
-	// 		const res=(await axios.post(`/server/UploadFiles/${form.mode}`,fd,{
-	// 			headers:{
-	// 				'Content-Type':'multipart/form-data'
-	// 			},
-	// 		}))//.then((res)=>{
-	// 		if(res.status!==200) return Promise.reject('error')
-	// 		console.log(res.data)
-	// 		forEach(res.data,(i)=>{
-	// 				console.log(fileList.value[i])
-	// 				fileList.value[i].status="success"
-	// 				fileList.value[i].percentage=100
-	// 		})
-	// 	} catch(e) {
-	// 		console.log('error',e)
-	// 	}
-	// }
-
-	// const uploadSmalls = async () => {
-	// 	form.guid=(await axios.get('/server/GetGUID/dir_predict')).data
-	// 	forEach(fileList.value,(file,i)=>{
-			
-	// 	})
-	// 	let i=0,cursize=0,maxsize=20*1024*1024,/*uploaded=0,*/count=fileList.value.length;
-	// 	while(i<count) {
-	// 		const fd=new FormData()
-	// 		while(i<count&&cursize+((isUndefined(fileList.value[i].size)?0:fileList.value[i].size) as number)<maxsize) {
-	// 			if(fileList.value[i].status==="ready") {
-	// 				fd.append('file',fileList.value[i].raw as File)
-	// 				//uploaded++;
-	// 				cursize+=fileList.value[i].size as number
-	// 			}
-	// 			i++
-	// 		}
-	// 		uploadOnce(fd)
-	// 		cursize=0
-	// 	}
-	// }
 	
-	const uploadSlices = () => {}  //to be done
+	const uploadSlices = async () => {    //to be done
+		//const
+		if(ready===0)return;
+		try{
+			if(form.guid==='') {
+				const res=(await axios.get('/server/GetGuid'))
+				if(res.status!==200) return Promise.reject('error')
+				form.guid=res.data
+			}
+		}
+		catch(e){
+			ElMessage.error(e?.toString())
+		}
+		const slicesize=4194304;
+		const total=isUndefined(fileList.value[0].size)?0:fileList.value[0].size
+		let cur=0;
+		while(cur<total) {
+			//
+		}
+	}  
 
 	const getFileSHA = (file:File) => {
+		if(file.size>20*1024*1024) return getFileSHAProgressive(file)
 		return new Promise(resolve=>{
 			const filereader=new FileReader()
 			filereader.readAsArrayBuffer(file)
 			filereader.onload = (e) =>{
-				const buffer=e.target?.result as ArrayBuffer
-				// @ts-ignore
+				const buffer=e.target?.result
 				const wordarray=CryptoJS.lib.WordArray.create(buffer) 
 				const SHA=CryptoJS.SHA256(wordarray).toString()
 				resolve(SHA)
@@ -333,13 +316,39 @@
 		})
 	}
 
+	const getFileSHAProgressive = (file:File) => {
+		return new Promise(resolve => {
+			const chunkSize = 1024 * 1024 * 4
+			const chunks = Math.ceil(file.size / chunkSize)
+			let currentChunk = 0
+			const hasher_sha1 = CryptoJS.algo.SHA256.create()
+			const fr=new FileReader()
+			fr.onload =  (e) => {
+				const CryptoJS_data = CryptoJS.lib.WordArray.create(e.target?.result)
+				hasher_sha1.update(CryptoJS_data)
+				currentChunk ++
+				if (currentChunk < chunks) {
+					loadprogress.value += 1/chunks/adding*100
+					loadNext()
+				} else {
+					resolve(hasher_sha1.finalize().toString())
+				}
+			}
+			function loadNext() {
+				var start = currentChunk * chunkSize,
+					end = start + chunkSize >= file.size ? file.size : start + chunkSize
+				//slices.push(file.slice(start, end))
+				fr.readAsArrayBuffer(file.slice(start, end))
+			}
+			loadNext()
+		})
+	}
 </script>
 <style>
 .card-header {
   display: flex;
   align-items: center;
 }
-
 .box-card {
 	margin-top: 10px;
 }
