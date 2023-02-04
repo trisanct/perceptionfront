@@ -8,8 +8,8 @@
   </div>
 </template>
 <script setup lang="ts">
-  import axios from "axios"
-  import { ref } from "vue";
+  import axios from 'axios'
+  import { ref } from 'vue';
 	const msg=ref('')
   const hello=()=>{
     axios.get(`/server/Hello`,  { data:{

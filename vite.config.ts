@@ -20,6 +20,8 @@ export default defineConfig({
         rewrite: (path) => path.replace(/^\/server/, '')
       }
     }
-		
-  }
+  },
+	build:{
+		sourcemap:true
+	}
 })
