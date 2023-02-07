@@ -1,8 +1,8 @@
 <template>
   <div class="two-cards">
     <el-card class="box-card">
-      <el-form :model="form">
-        <el-form-item label="检测模式">
+      <el-form ref="formref" :model="form" :rules="rules" label-width="90px" label-position="left">
+        <el-form-item label="检测模式" prop="mode">
           <el-select
             style="margin-right: 10px"
             v-model="mode"
@@ -15,16 +15,15 @@
             <el-option label="fps" value="fps" />
             <el-option label="directory" value="directory" />
           </el-select>
-          选择directory模式可上传多个文件,
-          选择video或fps模式可上传大于20MB的文件
+          选择directory模式可上传多个文件, 选择video或fps模式可上传大于20MB的文件
         </el-form-item>
         <el-form-item style="display: none">
           <el-input v-model="form.guid" />
         </el-form-item>
-        <el-form-item label="video_fps" v-if="form.mode === 'video'">
-          <el-input v-model="form.video_fps" />
+        <el-form-item label="fps" v-if="mode === 'video'" prop="fps">
+          <el-input v-model="form.fps" />
         </el-form-item>
-        <el-form-item label="test_interval" v-if="form.mode === 'fps'">
+        <el-form-item label="test_interval" v-if="mode === 'fps'" prop="test_interval">
           <el-input v-model="form.test_interval" />
         </el-form-item>
         <el-form-item label="参数1">
@@ -55,25 +54,11 @@
             :on-error="handleError"
             :disabled="loading || mode === ''"
           >
-            <el-button
-              style="margin-left: 12px"
-              type="primary"
-              :icon="Plus"
-              :loading="loading"
-              :disabled="mode === ''"
-            >
-              {{
-                loading ? loadprogress.toString().slice(0, 5) + '%' : '选择文件'
-              }}
+            <el-button style="margin-left: 12px" type="primary" :icon="Plus" :loading="loading" :disabled="mode === ''">
+              {{ loading ? loadprogress.toString().slice(0, 5) + '%' : '选择文件' }}
             </el-button>
           </el-upload>
-          <el-button
-            style="margin-left: 12px"
-            type="success"
-            :icon="Upload"
-            :loading="loading"
-            @click="submitUpload"
-          >
+          <el-button style="margin-left: 12px" type="success" :icon="Upload" :loading="loading" @click="submitUpload">
             开始上传
           </el-button>
         </div>
@@ -81,26 +66,12 @@
       <div v-for="(file, index) in fileList" :key="index">
         <el-card v-if="index < shown" shadow="never" class="fileblock">
           {{ file.name }} &nbsp; {{ countSize(file.size) }} &nbsp;&nbsp;
-          <el-button
-            v-if="file.status !== 'success'"
-            type="danger"
-            @click="handleRemove(index)"
-            >移除</el-button
-          >
-          <el-progress
-            :percentage="file.percentage"
-            :status="file.percentage === 100 ? 'success' : undefined"
-          />
+          <el-button v-if="file.status !== 'success'" type="danger" @click="handleRemove(index)">移除</el-button>
+          <el-progress :percentage="file.percentage" :status="file.percentage === 100 ? 'success' : undefined" />
         </el-card>
       </div>
       <br />
-      <el-button
-        type="success"
-        :icon="Check"
-        :disabled="loading"
-        @click="onSubmit"
-        >提交</el-button
-      >
+      <el-button type="success" :icon="Check" :disabled="loading" @click="onSubmit(formref)">提交</el-button>
     </el-card>
   </div>
 </template>
@@ -112,7 +83,7 @@ import { ElMessage } from 'element-plus'
 import { reactive, ref, watch } from 'vue'
 import { forEach, isUndefined } from 'lodash'
 import { Check, Plus, Upload } from '@element-plus/icons-vue'
-import type { UploadProps, UploadUserFile } from 'element-plus'
+import type { UploadProps, UploadUserFile, FormInstance, FormRules } from 'element-plus'
 
 let ready = 0
 let adding = 0
@@ -120,6 +91,7 @@ let loadaborted = false //to be done 计算文件哈希时切换模式
 const mode = ref('')
 const fileList = ref<UploadUserFile[]>([])
 const shas: string[] = []
+const sliceshas: string[] = []
 const shown = ref(0)
 const loading = ref(false)
 const loadprogress = ref(0)
@@ -128,11 +100,17 @@ const sha256 = CryptoJS.algo.SHA256.create()
 const form = reactive({
   guid: '',
   mode: '',
-  video_fps: '',
+  fps: '',
   test_interval: '',
   param1: '',
   param2: '',
   param3: '',
+})
+const formref = ref<FormInstance>()
+const rules = reactive<FormRules>({
+	mode:[{required:true,message:'请选择模式',trigger:'blur'}],
+	fps:[{required:true,message:'请输入视频fps',trigger:'blur'}],
+	test_interval:[{required:true,message:'请输入test间隔',trigger:'blur'}]
 })
 watch(fileList, async (a, b) => {
   if (a.length > b.length) {
@@ -140,10 +118,7 @@ watch(fileList, async (a, b) => {
     adding = a.length - b.length
     let i = b.length
     while (i < a.length) {
-      if (
-        modeType(mode.value) === 'image' &&
-        typeof a[i].size !== 'undefined'
-      ) {
+      if (modeType(mode.value) === 'image' && typeof a[i].size !== 'undefined') {
         if ((a[i].size as number) > 20 * 1048576) {
           fileList.value.splice(i, 1)
           ElMessage.warning('请选择小于20MB的文件')
@@ -188,14 +163,12 @@ watch(mode, (newmode, oldmode) => {
     if (newmodetype === 'image') {
       if (fileList.value.length > 0)
         if (
-          (isUndefined(fileList.value[0].size) ? 0 : fileList.value[0].size) >
-            20 * 1048576 ||
+          (isUndefined(fileList.value[0].size) ? 0 : fileList.value[0].size) > 20 * 1048576 ||
           !fileList.value[0].raw?.type.includes('image')
         )
           shown.value = 0
     } else {
-      if (fileList.value.length > 0)
-        if (!fileList.value[0].raw?.type.includes('video')) shown.value = 0
+      if (fileList.value.length > 0) if (!fileList.value[0].raw?.type.includes('video')) shown.value = 0
     }
   }
   fileList.value.splice(shown.value, fileList.value.length - shown.value)
@@ -236,6 +209,7 @@ const submitUpload = () => {
     ElMessage.warning('没有需要上传的文件')
     return
   }
+  started.value = true
   if (mode.value === 'predict') {
     //单传
     uploadFile()
@@ -254,9 +228,19 @@ const submitUpload = () => {
   ElMessage.error('出错啦')
 }
 
-const onSubmit = () => {
-  //to be done
-  console.log('submit!')
+const onSubmit = async (formEl: FormInstance | undefined) => {
+  if (!formEl) return
+  await formEl.validate(async (valid, fields) => {
+    if (valid) {
+			//to be done
+			const res = await axios.post(`/server/Submit`,{
+				mode:form.mode,
+				guid:form.guid,
+				
+			})
+      if (res.status !== 200) return Promise.reject('error')
+    } else return
+  })
 }
 
 const countSize = (bytes: any) => {
@@ -313,13 +297,11 @@ const uploadOne = async (i: number, extra: extradata[] = []) => {
 }
 
 const uploadFile = async () => {
-  started.value = true
   form.guid = await uploadOne(0)
 }
 
 const uploadFiles = async () => {
   try {
-    started.value = true
     if (form.guid === '') {
       const res = await axios.get(`/server/GetGuid/${mode.value}`)
       if (res.status !== 200) return Promise.reject('error')
@@ -332,19 +314,20 @@ const uploadFiles = async () => {
   while (i < fileList.value.length) {
     if (fileList.value[i].status === 'ready') {
       console.log('即将进入uploadone')
-      uploadOne(i, [{ name: 'guid', value: form.guid }])
+      uploadOne(i, [{ name: 'guid', value: form.guid },{name:'id',value:i.toString()}])
     }
     i++
   }
 }
 
 const uploadSlices = async () => {
-  //to be done
-  //const
   try {
     const file = fileList.value[0].raw as File
     if (form.guid === '') {
-      const res = await axios.get(`/server/GetGuid/${mode.value}/${file.name}`)
+      const res = await axios.post(`/server/GetGuid`,{
+				filename:file.name,
+				sha:shas[0]
+			})
       if (res.status !== 200) return Promise.reject('error')
       form.guid = res.data
     }
@@ -357,16 +340,26 @@ const uploadSlices = async () => {
       if (start + slicesize < total) end = start + slicesize
       else end = total
       const slice = file.slice(start, end)
-      const sha = getFileSHAProgressive(slice, false)
+      console.log(slice.type)
+      let sha = CryptoJS.SHA256(CryptoJS.lib.WordArray.create(await slice.arrayBuffer()))
+      while (sha.length < 64) sha = '0' + sha
       const fd = new FormData()
-      fd.append('fileslice', slice)
-      const res = await axios.post(`/server/UploadSlice/${mode.value}`, fd, {
+      fd.append('file', slice)
+      fd.append('guid', form.guid)
+      fd.append('sha', sha)
+      fd.append('id', i.toString())
+      const res = await axios.post(`/server/UploadSlice/${end === total}`, fd, {
         headers: {
           'Content-Type': 'multipart/form-data',
-        },
+        }
       })
       start = end
+      fileList.value[0].percentage = +((start / total) * 100).toFixed(2)
+      i++
     }
+    fileList.value[0].percentage = 100
+    fileList.value[0].status = 'success'
+    ready--
   } catch (e) {
     ElMessage.error(e?.toString())
   }
@@ -375,8 +368,7 @@ const uploadSlices = async () => {
 const getFileSHAProgressive = async (file: Blob, update: boolean = true) => {
   const sliceSize = 4194304
   const total = file.size
-  let current = 0,
-    start = 0,
+  let start = 0,
     end = 0
   while (start < total) {
     if (start + sliceSize < total) end = start + sliceSize
@@ -384,13 +376,12 @@ const getFileSHAProgressive = async (file: Blob, update: boolean = true) => {
     const slice = file.slice(start, end)
     const arraybuffer = await slice.arrayBuffer()
     sha256.update(CryptoJS.lib.WordArray.create(arraybuffer))
-    if (update)
-      updateLoadProgress(
-        loadprogress.value + ((end - start) / total / adding) * 100
-      )
+    if (update) updateLoadProgress(loadprogress.value + ((end - start) / total / adding) * 100)
     start = end
   }
-  return sha256.finalize().toString()
+  let sha: string = sha256.finalize().toString()
+  while (sha.length < 64) sha = '0' + sha
+  return sha
 }
 </script>
 <style>
