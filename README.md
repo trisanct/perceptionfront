@@ -1,6 +1,6 @@
 # perceptionfront
 
-This template should help get you started developing with Vue 3 in Vite.
+A web user interface for a plant disease detection network.
 
 ## Recommended IDE Setup
 
