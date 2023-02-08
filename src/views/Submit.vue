@@ -1,6 +1,6 @@
 <template>
   <div class="two-cards">
-    <el-card class="box-card">
+    <el-card class="keepdis">
       <el-form ref="formref" :model="form" :rules="rules" label-width="120px" label-position="left">
         <el-form-item label="检测模式" prop="mode">
           <el-select style="margin-right: 10px" v-model="mode" placeholder="请选择检测模式" :disabled="started || loading" @change="true">
@@ -28,7 +28,6 @@
         </el-form-item>
       </el-form>
     </el-card>
-
     <el-card class="box-card">
       <template #header>
         <div class="card-header">
@@ -53,16 +52,41 @@
         </div>
       </template>
       <div v-for="(file, index) in fileList" :key="index">
-        <el-card v-if="index < shown" shadow="never" class="fileblock">
-          {{ file.name }} &nbsp; {{ countSize(file.size) }} &nbsp;&nbsp;
-          <el-button v-if="file.status !== 'success'" type="danger" @click="handleRemove(index)">移除</el-button>
-          <el-popover placement="right-start" title="查看图片" width="auto" trigger="hover">
-            <el-image style="width: 300px; height: 300px" :src="imgurls[index]" fit="scale-down" />
-            <template #reference>
-              <el-button class="m-2">查看</el-button>
-            </template>
-          </el-popover>
-          <el-progress class="fileblock" :percentage="file.percentage" :status="file.percentage === 100 ? 'success' : undefined" />
+        <el-card v-if="index < shown" shadow="never" class="keepdis">
+					<el-row :gutter="30" style="align-items: center;">
+						<el-col :span="1">
+          		<el-button v-if="file.status !== 'success'" type="danger" @click="handleRemove(index)">移除</el-button>
+						</el-col>
+						<el-col :span="1">
+							<el-popover placement="right-start" width="auto" trigger="hover">
+								<el-image
+									v-if="modeType(mode) === 'image'"
+									:src="previewurls[index]"
+									style="width: 400px; height: 300px"
+									fit="contain"
+									:preview-teleported="true"
+									:preview-src-list="previewurls"
+									:initial-index="index"
+								/>
+								<video v-if="modeType(mode) === 'video'" :src="previewurls[index]" style="width: 800px; height: 450px;" controls></video>
+								<template #reference>
+									<el-button class="m-2">查看</el-button>
+								</template>
+							</el-popover>
+						</el-col>
+						<el-col :span="5" style="white-space:nowrap;overflow: hidden;text-overflow: ellipsis;">
+							<el-popover placement="top" width="auto" trigger="hover">
+								<p style="font-size: larger;">{{ file.name }}</p>
+								<template #reference>
+									{{ file.name }}
+								</template>
+							</el-popover>
+						</el-col>
+						<el-col :span="1">{{ countSize(file.size) }}</el-col>
+						<el-col :span="16">
+							<el-progress class="keepdis" style="width: 100%;" :stroke-width="16" :percentage="file.percentage" :status="file.percentage === 100 ? 'success' : undefined" />
+						</el-col>
+					</el-row>
         </el-card>
       </div>
       <br />
@@ -83,12 +107,6 @@ import type { UploadProps, UploadUserFile, FormInstance, FormRules } from 'eleme
 let ready = 0
 let adding = 0
 let loadaborted = false //to be done 计算文件哈希时切换模式
-enum modes {
-  predict,
-  video,
-  fps,
-  directory,
-}
 const mode = ref('')
 const fileList = ref<UploadUserFile[]>([])
 const shas: string[] = []
@@ -98,7 +116,7 @@ const loading = ref(false)
 const loadprogress = ref(0)
 const started = ref(false)
 const sha256 = CryptoJS.algo.SHA256.create()
-const imgurls = ref<string[]>([])
+const previewurls = ref<string[]>([])
 const form = reactive({
   guid: '',
   cuda: false,
@@ -134,9 +152,9 @@ const rules = reactive<FormRules>({
     { type: 'number', message: 'test_interval必须是一个数' },
   ],
   confidence: [
-		{ required: true, message: '请输入置信度', trigger: 'blur' },
-		{ validator:validateConfidence, trigger: 'blur' }
-	],
+    { required: true, message: '请输入置信度', trigger: 'blur' },
+    { validator: validateConfidence, trigger: 'blur' },
+  ],
 })
 watch(fileList, async (a, b) => {
   if (a.length > b.length) {
@@ -170,7 +188,7 @@ watch(fileList, async (a, b) => {
         ElMessage.warning('请勿添加相同文件')
       } else {
         shas.push(fsha)
-        imgurls.value.push(URL.createObjectURL(a[i].raw!))
+        previewurls.value.push(URL.createObjectURL(a[i].raw!))
         shown.value++
         ready++
         i++
@@ -204,6 +222,7 @@ watch(mode, (newmode, oldmode) => {
     }
   }
   fileList.value.splice(shown.value, fileList.value.length - shown.value)
+  previewurls.value.splice(shown.value, previewurls.value.length - shown.value)
   if (shas.splice(shown.value, shas.length - shown.value).length !== 0) ElMessage.warning('部分或全部文件因模式切换而移除')
 })
 
@@ -220,7 +239,7 @@ const handleRemove = (i: number) => {
   fileList.value.splice(i, 1)
   shown.value--
   shas.splice(i, 1)
-  imgurls.value.splice(i, 1)
+  previewurls.value.splice(i, 1)
 }
 
 const handleError: UploadProps['onError'] = (error, file, uploadFiles) => {
@@ -272,8 +291,8 @@ const onSubmit = async (formEl: FormInstance | undefined) => {
       const res = await axios.post(`/server/Submit`, {
         mode: form.mode,
         guid: form.guid,
-				cuda: form.cuda,
-				confidence: form.confidence,
+        cuda: form.cuda,
+        confidence: form.confidence,
         fps: form.fps,
         interval: form.test_interval,
       })
@@ -424,18 +443,16 @@ const getFileSHAProgressive = async (file: Blob, update: boolean = true) => {
 }
 </script>
 <style>
-.card-header {
-  display: flex;
-  align-items: center;
-}
-.box-card {
-  margin-top: 10px;
-}
 .two-cards {
   margin-left: 5%;
   margin-right: 5%;
 }
-.fileblock {
+.card-header {
+  display: flex;
+  align-items: center; /*垂直居中*/
+}
+.keepdis{
   margin-top: 5px;
+	margin-bottom: 5px;
 }
 </style>
