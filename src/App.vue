@@ -4,8 +4,10 @@ import Menu from "./components/Menu.vue"
 </script>
 
 <template>
-  <div><Menu></Menu></div>
-  <div style="margin-top: 10px"><RouterView /></div>
+  <Menu></Menu>
+  <div style="margin-left:10%;margin-right:10%;"><RouterView /></div>
 </template>
 
-<style scoped></style>
+<style scoped>
+
+</style>
