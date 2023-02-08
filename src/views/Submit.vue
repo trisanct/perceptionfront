@@ -1,15 +1,9 @@
 <template>
   <div class="two-cards">
     <el-card class="box-card">
-      <el-form ref="formref" :model="form" :rules="rules" label-width="90px" label-position="left">
+      <el-form ref="formref" :model="form" :rules="rules" label-width="120px" label-position="left">
         <el-form-item label="检测模式" prop="mode">
-          <el-select
-            style="margin-right: 10px"
-            v-model="mode"
-            placeholder="请选择检测模式"
-            :disabled="started || loading"
-            @change="true"
-          >
+          <el-select style="margin-right: 10px" v-model="mode" placeholder="请选择检测模式" :disabled="started || loading" @change="true">
             <el-option label="predict" value="predict" />
             <el-option label="video" value="video" />
             <el-option label="fps" value="fps" />
@@ -20,20 +14,17 @@
         <el-form-item style="display: none">
           <el-input v-model="form.guid" />
         </el-form-item>
-        <el-form-item label="fps" v-if="mode === 'video'" prop="fps">
-          <el-input v-model="form.fps" />
+        <el-form-item label="使用GPU计算">
+          <el-switch v-model="form.cuda" />
         </el-form-item>
-        <el-form-item label="test_interval" v-if="mode === 'fps'" prop="test_interval">
-          <el-input v-model="form.test_interval" />
+        <el-form-item label="视频帧率" v-if="mode === 'video'" prop="fps">
+          <el-input v-model.number="form.fps" />
         </el-form-item>
-        <el-form-item label="参数1">
-          <el-input v-model="form.param1" />
+        <el-form-item label="帧率检测次数" v-if="mode === 'fps'" prop="test_interval">
+          <el-input v-model.number="form.test_interval" />
         </el-form-item>
-        <el-form-item label="参数2">
-          <el-input v-model="form.param2" />
-        </el-form-item>
-        <el-form-item label="参数3">
-          <el-input v-model="form.param3" />
+        <el-form-item label="置信度" v-if="mode !== 'fps'" prop="confidence">
+          <el-input v-model="form.confidence" />
         </el-form-item>
       </el-form>
     </el-card>
@@ -58,16 +49,20 @@
               {{ loading ? loadprogress.toString().slice(0, 5) + '%' : '选择文件' }}
             </el-button>
           </el-upload>
-          <el-button style="margin-left: 12px" type="success" :icon="Upload" :loading="loading" @click="submitUpload">
-            开始上传
-          </el-button>
+          <el-button style="margin-left: 12px" type="success" :icon="Upload" :loading="loading" @click="submitUpload"> 开始上传 </el-button>
         </div>
       </template>
       <div v-for="(file, index) in fileList" :key="index">
         <el-card v-if="index < shown" shadow="never" class="fileblock">
           {{ file.name }} &nbsp; {{ countSize(file.size) }} &nbsp;&nbsp;
           <el-button v-if="file.status !== 'success'" type="danger" @click="handleRemove(index)">移除</el-button>
-          <el-progress :percentage="file.percentage" :status="file.percentage === 100 ? 'success' : undefined" />
+          <el-popover placement="right-start" title="查看图片" width="auto" trigger="hover">
+            <el-image style="width: 300px; height: 300px" :src="imgurls[index]" fit="scale-down" />
+            <template #reference>
+              <el-button class="m-2">查看</el-button>
+            </template>
+          </el-popover>
+          <el-progress class="fileblock" :percentage="file.percentage" :status="file.percentage === 100 ? 'success' : undefined" />
         </el-card>
       </div>
       <br />
@@ -88,6 +83,12 @@ import type { UploadProps, UploadUserFile, FormInstance, FormRules } from 'eleme
 let ready = 0
 let adding = 0
 let loadaborted = false //to be done 计算文件哈希时切换模式
+enum modes {
+  predict,
+  video,
+  fps,
+  directory,
+}
 const mode = ref('')
 const fileList = ref<UploadUserFile[]>([])
 const shas: string[] = []
@@ -97,20 +98,45 @@ const loading = ref(false)
 const loadprogress = ref(0)
 const started = ref(false)
 const sha256 = CryptoJS.algo.SHA256.create()
+const imgurls = ref<string[]>([])
 const form = reactive({
   guid: '',
-  mode: '',
-  fps: '',
-  test_interval: '',
-  param1: '',
-  param2: '',
-  param3: '',
+  cuda: false,
+  mode: -1,
+  fps: 0,
+  test_interval: 0,
+  confidence: 0,
 })
 const formref = ref<FormInstance>()
+const validateMode = (rule: any, value: number, callback: any) => {
+  if (value < 0 || value > 3) {
+    callback(new Error('请选择模式'))
+  } else {
+    callback()
+  }
+}
+const validateConfidence = (rule: any, value: any, callback: any) => {
+  const pat: RegExp = /0\.\d*[1-9]/
+  if (!pat.test(value)) {
+    callback(new Error('请输入正确的置信度'))
+  } else {
+    callback()
+  }
+}
 const rules = reactive<FormRules>({
-	mode:[{required:true,message:'请选择模式',trigger:'blur'}],
-	fps:[{required:true,message:'请输入视频fps',trigger:'blur'}],
-	test_interval:[{required:true,message:'请输入test间隔',trigger:'blur'}]
+  mode: [{ required: true }, { validator: validateMode, trigger: 'blur' }],
+  fps: [
+    { required: true, message: '请输入视频fps', trigger: 'blur' },
+    { type: 'number', message: 'fps必须是一个数' },
+  ],
+  test_interval: [
+    { required: true, message: '请输入test_interval', trigger: 'blur' },
+    { type: 'number', message: 'test_interval必须是一个数' },
+  ],
+  confidence: [
+		{ required: true, message: '请输入置信度', trigger: 'blur' },
+		{ validator:validateConfidence, trigger: 'blur' }
+	],
 })
 watch(fileList, async (a, b) => {
   if (a.length > b.length) {
@@ -144,6 +170,7 @@ watch(fileList, async (a, b) => {
         ElMessage.warning('请勿添加相同文件')
       } else {
         shas.push(fsha)
+        imgurls.value.push(URL.createObjectURL(a[i].raw!))
         shown.value++
         ready++
         i++
@@ -153,27 +180,31 @@ watch(fileList, async (a, b) => {
     adding = 0
   }
 })
+const modevalue = (mode: string) => {
+  if (mode === 'predict') return 0
+  if (mode === 'video') return 1
+  if (mode === 'fps') return 2
+  if (mode === 'directory') return 3
+  return 9
+}
 watch(mode, (newmode, oldmode) => {
   form.guid = ''
-  form.mode = mode.value
+  form.mode = modevalue(mode.value)
+  formref.value?.validateField('mode', () => null)
   const oldmodetype = modeType(oldmode)
   const newmodetype = modeType(newmode)
   if (newmode !== 'directory') if (fileList.value.length > 1) shown.value = 1
   if (oldmodetype !== newmodetype) {
     if (newmodetype === 'image') {
       if (fileList.value.length > 0)
-        if (
-          (isUndefined(fileList.value[0].size) ? 0 : fileList.value[0].size) > 20 * 1048576 ||
-          !fileList.value[0].raw?.type.includes('image')
-        )
+        if ((isUndefined(fileList.value[0].size) ? 0 : fileList.value[0].size) > 20 * 1048576 || !fileList.value[0].raw?.type.includes('image'))
           shown.value = 0
     } else {
       if (fileList.value.length > 0) if (!fileList.value[0].raw?.type.includes('video')) shown.value = 0
     }
   }
   fileList.value.splice(shown.value, fileList.value.length - shown.value)
-  if (shas.splice(shown.value, shas.length - shown.value).length !== 0)
-    ElMessage.warning('部分或全部文件因模式切换而移除')
+  if (shas.splice(shown.value, shas.length - shown.value).length !== 0) ElMessage.warning('部分或全部文件因模式切换而移除')
 })
 
 const handleExceed: UploadProps['onExceed'] = (files, uploadFiles) => {
@@ -189,6 +220,7 @@ const handleRemove = (i: number) => {
   fileList.value.splice(i, 1)
   shown.value--
   shas.splice(i, 1)
+  imgurls.value.splice(i, 1)
 }
 
 const handleError: UploadProps['onError'] = (error, file, uploadFiles) => {
@@ -225,24 +257,30 @@ const submitUpload = () => {
     uploadFiles()
     return
   }
-  ElMessage.error('出错啦')
+  ElMessage.error('错误')
 }
 
 const onSubmit = async (formEl: FormInstance | undefined) => {
   if (!formEl) return
   await formEl.validate(async (valid, fields) => {
     if (valid) {
-			//to be done
-			const res = await axios.post(`/server/Submit`,{
-				mode:form.mode,
-				guid:form.guid,
-				
-			})
+      //to be done
+      if (fileList.value.length === 0 || ready !== 0) {
+        ElMessage.warning('请在文件上传完成后再提交')
+        return
+      }
+      const res = await axios.post(`/server/Submit`, {
+        mode: form.mode,
+        guid: form.guid,
+				cuda: form.cuda,
+				confidence: form.confidence,
+        fps: form.fps,
+        interval: form.test_interval,
+      })
       if (res.status !== 200) return Promise.reject('error')
     } else return
   })
 }
-
 const countSize = (bytes: any) => {
   if (typeof bytes !== 'number') return '0B'
   if (bytes === 0) return '0B'
@@ -286,13 +324,12 @@ const uploadOne = async (i: number, extra: extradata[] = []) => {
     if (res.status !== 200) return Promise.reject('error')
     fileList.value[i].percentage = 100
     fileList.value[i].status = 'success'
+    ready--
     return res.data
   } catch (e) {
     fileList.value[i].percentage = 0
     fileList.value[i].status = 'fail'
     ElMessage.error(e?.toString())
-  } finally {
-    ready--
   }
 }
 
@@ -313,8 +350,10 @@ const uploadFiles = async () => {
   let i = 0
   while (i < fileList.value.length) {
     if (fileList.value[i].status === 'ready') {
-      console.log('即将进入uploadone')
-      uploadOne(i, [{ name: 'guid', value: form.guid },{name:'id',value:i.toString()}])
+      uploadOne(i, [
+        { name: 'guid', value: form.guid },
+        { name: 'id', value: i.toString() },
+      ])
     }
     i++
   }
@@ -324,10 +363,10 @@ const uploadSlices = async () => {
   try {
     const file = fileList.value[0].raw as File
     if (form.guid === '') {
-      const res = await axios.post(`/server/GetGuid`,{
-				filename:file.name,
-				sha:shas[0]
-			})
+      const res = await axios.post(`/server/GetGuid`, {
+        filename: file.name,
+        sha: shas[0],
+      })
       if (res.status !== 200) return Promise.reject('error')
       form.guid = res.data
     }
@@ -351,7 +390,7 @@ const uploadSlices = async () => {
       const res = await axios.post(`/server/UploadSlice/${end === total}`, fd, {
         headers: {
           'Content-Type': 'multipart/form-data',
-        }
+        },
       })
       start = end
       fileList.value[0].percentage = +((start / total) * 100).toFixed(2)
