@@ -1,7 +1,7 @@
 <template>
   <h1>提交检测</h1>
   <el-card shadow="never">
-		<h3 style="margin-top: 0px;margin-bottom: 20px;">参数设定</h3>
+    <h3 style="margin-top: 0px; margin-bottom: 20px">参数设定</h3>
     <el-form ref="formref" :model="form" :rules="rules" label-width="120px" label-position="left">
       <el-form-item label="检测模式" prop="mode">
         <el-select style="margin-right: 10px" v-model="mode" placeholder="请选择检测模式" :disabled="started || loading" @change="true">
@@ -28,9 +28,9 @@
         <el-input v-model="form.confidence" />
       </el-form-item>
     </el-form>
-		<el-divider />
+    <el-divider />
     <div class="card-header">
-      <h3 style="margin: 0px;">上传用于检测的文件</h3>
+      <h3 style="margin: 0px">上传用于检测的文件</h3>
       <el-upload
         ref="uploadref"
         v-model:file-list="fileList"
@@ -103,6 +103,7 @@ import axios from 'axios'
 import CryptoJS from 'crypto-js'
 import { ElMessage } from 'element-plus'
 import { reactive, ref, watch } from 'vue'
+import { useRouter } from 'vue-router';
 import { forEach, isUndefined } from 'lodash'
 import { Check, Plus, Upload } from '@element-plus/icons-vue'
 import type { UploadProps, UploadUserFile, FormInstance, FormRules } from 'element-plus'
@@ -119,6 +120,7 @@ const loadprogress = ref(0) //文件哈希计算总进度
 const started = ref(false) //至少点击过一次上传
 const sha256 = CryptoJS.algo.SHA256.create()
 const previewurls = ref<string[]>([]) //上传的文件或视频预览url
+const router=useRouter()
 const form = reactive({
   //提交的表单数据
   guid: '',
@@ -277,21 +279,29 @@ const onSubmit = async (formEl: FormInstance | undefined) => {
   await formEl.validate(async (valid, fields) => {
     if (valid) {
       //to be done
-      if (fileList.value.length === 0 || ready !== 0) {
-        ElMessage.warning('请在文件上传完成后再提交')
-        return
+      try {
+        if (fileList.value.length === 0 || ready !== 0) {
+          ElMessage.warning('请在文件上传完成后再提交')
+          return
+        }
+        const res = await axios.post(`/server/Submit`, {
+          mode: form.mode,
+          guid: form.guid,
+          cuda: form.cuda,
+          confidence: form.confidence,
+          fps: form.fps,
+          interval: form.test_interval,
+        })
+        redirectToHistory(res.data)
+        if (res.status !== 200) return Promise.reject('error')
+      } catch (e) {
+          ElMessage.error(e?.toString())
       }
-      const res = await axios.post(`/server/Submit`, {
-        mode: form.mode,
-        guid: form.guid,
-        cuda: form.cuda,
-        confidence: form.confidence,
-        fps: form.fps,
-        interval: form.test_interval,
-      })
-      if (res.status !== 200) return Promise.reject('error')
     } else return
   })
+}
+const redirectToHistory = (id:any) => {
+  router.push(`/History/${id}`)
 }
 const countSize = (bytes: any) => {
   //显示文件大小
@@ -357,7 +367,7 @@ const uploadFile = async () => {
 const uploadFiles = async () => {
   try {
     if (form.guid === '') {
-      const res = await axios.get(`/server/GetGuid/${mode.value}`)
+      const res = await axios.get(`/server/GetGuid`)
       if (res.status !== 200) return Promise.reject('error')
       form.guid = res.data
     }
@@ -442,7 +452,7 @@ const getFileSHAProgressive = async (file: Blob, update: boolean = true) => {
 .card-header {
   display: flex;
   align-items: center; /*垂直居中*/
-	margin-bottom: 20px;
+  margin-bottom: 20px;
 }
 .keepdis {
   margin-top: 5px;
