@@ -5,7 +5,11 @@ import Menu from "./components/Menu.vue"
 
 <template>
   <Menu></Menu>
-  <div style="margin-left:10%;margin-right:10%;"><RouterView /></div>
+  <el-row>
+    <el-col :xs="0" :md="1" :lg="2"></el-col>
+    <el-col :xs="24" :md="22" :lg="20"><RouterView></RouterView></el-col>
+    <el-col :xs="0" :md="1" :lg="2"></el-col>
+  </el-row>
 </template>
 
 <style scoped>

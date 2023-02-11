@@ -30,7 +30,6 @@
     </el-form>
     <el-divider />
     <div class="card-header">
-      <h3 style="margin: 0px">上传用于检测的文件</h3>
       <el-upload
         ref="uploadref"
         v-model:file-list="fileList"
@@ -51,11 +50,11 @@
     </div>
     <div v-for="(file, index) in fileList" :key="index">
       <el-card v-if="index < shown" shadow="never" class="keepdis">
-        <el-row :gutter="0" style="align-items: center">
-          <el-col :span="2">
-            <el-button v-if="file.status !== 'success'" type="danger" @click="handleRemove(index)">移除</el-button>
+        <el-row :gutter="0" style="align-items: center;font-size:14px; ">
+          <el-col :xs="4" :sm="3" :md="2" :xl="1">
+            <el-button v-if="file.status !== 'success'" type="danger" :icon="Close" @click="handleRemove(index)"></el-button>
           </el-col>
-          <el-col :span="2">
+          <el-col :xs="4" :sm="3" :md="2" :xl="1">
             <el-popover placement="right" width="auto" trigger="hover">
               <el-image
                 v-if="modeType(mode) === 'image'"
@@ -68,11 +67,11 @@
               />
               <video v-if="modeType(mode) === 'video'" :src="previewurls[index]" style="width: 800px; height: 450px" controls></video>
               <template #reference>
-                <el-button type="default">查看</el-button>
+                <el-button type="default" :icon="View"></el-button>
               </template>
             </el-popover>
           </el-col>
-          <el-col :span="6">
+          <el-col :xs="6" :sm="7" :md="8" :xl="8">
             <el-popover placement="top-start" width="auto" trigger="hover">
               {{ file.name }}
               <template #reference>
@@ -80,12 +79,13 @@
               </template>
             </el-popover>
           </el-col>
-          <el-col :span="2">{{ countSize(file.size) }}</el-col>
-          <el-col :span="12">
+          <el-col :xs="4" :sm="3" :md="2" :xl="2">{{ countSize(file.size) }}</el-col>
+          <el-col :xs="6" :sm="8" :md="10" :xl="12">
             <el-progress
               class="keepdis"
               style="width: 100%"
-              :stroke-width="16"
+              :text-inside="true"
+              :stroke-width="18"
               :percentage="file.percentage"
               :status="file.percentage === 100 ? 'success' : undefined"
             />
@@ -103,9 +103,9 @@ import axios from 'axios'
 import CryptoJS from 'crypto-js'
 import { ElMessage } from 'element-plus'
 import { reactive, ref, watch } from 'vue'
-import { useRouter } from 'vue-router';
+import { useRouter } from 'vue-router'
 import { forEach, isUndefined } from 'lodash'
-import { Check, Plus, Upload } from '@element-plus/icons-vue'
+import { Check, Plus, Upload, Close, View } from '@element-plus/icons-vue'
 import type { UploadProps, UploadUserFile, FormInstance, FormRules } from 'element-plus'
 
 let ready = 0 //未上传的文件数量
@@ -118,7 +118,6 @@ const shown = ref(0) //显示的文件数量
 const loading = ref(false) //是否正在计算文件哈希
 const loadprogress = ref(0) //文件哈希计算总进度
 const started = ref(false) //至少点击过一次上传
-const sha256 = CryptoJS.algo.SHA256.create()
 const previewurls = ref<string[]>([]) //上传的文件或视频预览url
 const router=useRouter()
 const form = reactive({
@@ -188,11 +187,11 @@ watch(fileList, async (a, b) => {
         }
       }
       const fsha = (await getFileSHAProgressive(a[i].raw as File)) as string
-      console.log(fsha)
       if (shas.includes(fsha)) {
         fileList.value.splice(i, 1)
         ElMessage.warning('请勿添加相同文件')
       } else {
+        console.log(a[i].name,fsha)
         shas.push(fsha)
         previewurls.value.push(URL.createObjectURL(a[i].raw!))
         shown.value++
@@ -292,9 +291,9 @@ const onSubmit = async (formEl: FormInstance | undefined) => {
           fps: form.fps,
           interval: form.test_interval,
         })
-        redirectToHistory(res.data)
         if (res.status !== 200) return Promise.reject('error')
-      } catch (e) {
+        redirectToHistory(res.data)
+      } catch (e:any) {
           ElMessage.error(e?.toString())
       }
     } else return
@@ -355,7 +354,7 @@ const uploadOne = async (i: number, extra: extradata[] = []) => {
     fileList.value[i].status = 'success'
     ready--
     return res.data
-  } catch (e) {
+  } catch (e:any) {
     fileList.value[i].percentage = 0
     fileList.value[i].status = 'fail'
     ElMessage.error(e?.toString())
@@ -371,15 +370,14 @@ const uploadFiles = async () => {
       if (res.status !== 200) return Promise.reject('error')
       form.guid = res.data
     }
-  } catch (e) {
+  } catch (e:any) {
     ElMessage.error(e?.toString())
   }
   let i = 0
   while (i < fileList.value.length) {
     if (fileList.value[i].status === 'ready') {
       uploadOne(i, [
-        { name: 'guid', value: form.guid },
-        { name: 'id', value: i.toString() },
+        { name: 'guid', value: form.guid }
       ])
     }
     i++
@@ -405,13 +403,11 @@ const uploadSlices = async () => {
       if (start + slicesize < total) end = start + slicesize
       else end = total
       const slice = file.slice(start, end)
-      console.log(slice.type)
-      let sha = CryptoJS.SHA256(CryptoJS.lib.WordArray.create(await slice.arrayBuffer()))
-      while (sha.length < 64) sha = '0' + sha
+      //let sha = CryptoJS.SHA256(CryptoJS.lib.WordArray.create(await slice.arrayBuffer()))
+      //while (sha.length < 64) sha = '0' + sha
       const fd = new FormData()
       fd.append('file', slice)
       fd.append('guid', form.guid)
-      fd.append('sha', sha)
       fd.append('id', i.toString())
       const res = await axios.post(`/server/UploadSlice/${end === total}`, fd, {
         headers: {
@@ -425,11 +421,12 @@ const uploadSlices = async () => {
     fileList.value[0].percentage = 100
     fileList.value[0].status = 'success'
     ready--
-  } catch (e) {
+  } catch (e:any) {
     ElMessage.error(e?.toString())
   }
 }
 const getFileSHAProgressive = async (file: Blob, update: boolean = true) => {
+  const sha256 = CryptoJS.algo.SHA256.create()
   const sliceSize = 4194304
   const total = file.size
   let start = 0,
@@ -448,7 +445,7 @@ const getFileSHAProgressive = async (file: Blob, update: boolean = true) => {
   return sha
 }
 </script>
-<style>
+<style scoped>
 .card-header {
   display: flex;
   align-items: center; /*垂直居中*/

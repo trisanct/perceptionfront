@@ -1,6 +1,7 @@
 <template>
   <div class="about">
-    <h1>This is a test page</h1>
+    <h1>测试页面</h1>
+    <h2>若点击按钮后出现Hello字样则与服务器通信正常。</h2>
     <el-button @click="hello">测试服务器是否连通</el-button>
     <h2>{{msg}}</h2>
     
