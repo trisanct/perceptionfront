@@ -25,10 +25,15 @@ export default defineConfig({
   server:{
 		host:"0.0.0.0",
     proxy:{
-      "/input":{
-        target: "http://localhost:5171/input",
+      "/upload":{
+        target: "http://localhost:5171/upload",
 				changeOrigin: true,
-        rewrite: (path) => path.replace(/^\/input/, '')
+        rewrite: (path) => path.replace(/^\/upload/, '')
+      },
+      "/static":{
+        target: "http://localhost:5171/",
+				changeOrigin: true,
+        rewrite: (path) => path.replace(/^\/static/, '')
       },
       "/server":{
         target: "http://localhost:5171/Perception",

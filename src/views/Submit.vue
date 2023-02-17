@@ -300,7 +300,7 @@ const onSubmit = async (formEl: FormInstance | undefined) => {
   })
 }
 const redirectToHistory = (id:any) => {
-  router.push(`/History/${id}`)
+  router.push(`/Record/${id}`)
 }
 const countSize = (bytes: any) => {
   //显示文件大小
