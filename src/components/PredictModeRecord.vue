@@ -1,6 +1,4 @@
 <template>
-  <el-result v-if="record?.state==='Waiting'" title="请稍后" sub-title="正在检测中">
-  </el-result>
   <el-descriptions class="margin-top" :column="3" :size="'default'" border>
     <el-descriptions-item>
       <template #label>

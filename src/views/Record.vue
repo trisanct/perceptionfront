@@ -1,6 +1,6 @@
 <template>
   <h1>检测记录详情 #{{ $route.params.id }}</h1>
-  <el-empty v-if="loading" v-loading="true" style="width:100%;height:100%" description="加载中"></el-empty>
+  <div v-if="loading" v-loading.fullscreen="true"></div>
   <el-result v-if="state==='Waiting'" title="请稍后" sub-title="正在检测中"></el-result>
   <el-result icon="error" v-if="state==='Error'" title="出错了" sub-title="请联系管理员"></el-result>
   <PredictModeRecord v-if="mode==='Predict'" :record="record"></PredictModeRecord>
@@ -24,7 +24,7 @@
 </template>
 <script setup lang="ts">
 import axios from 'axios'
-import { ref, onMounted } from 'vue'
+import { ref, onMounted, provide } from 'vue'
 import { useRouter } from 'vue-router'
 import PredictModeRecord from '@/components/PredictModeRecord.vue';
 const router = useRouter()
@@ -53,8 +53,7 @@ const router = useRouter()
 const id = router.currentRoute.value.params.id
 const mode = ref('')
 const state = ref('')
-let record:any
-//const record = ref( )
+let record: any
 const loading = ref(true)
 const gethistory = async () => {
   return (await axios.get(`/server/History/${id}`)).data

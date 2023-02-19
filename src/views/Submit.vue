@@ -3,8 +3,16 @@
   <el-card shadow="never">
     <h3 style="margin-top: 0px; margin-bottom: 20px">参数设定</h3>
     <el-form ref="formref" :model="form" :rules="rules" label-width="120px" label-position="left">
+      <el-form-item label="数据集" prop="mode">
+        <el-select style="margin-right: 10px" v-model="dataset" placeholder="请选择数据集" :disabled="started || loading">
+          <el-option label="数据集1" value="predict" />
+          <el-option label="数据集2" value="video" />
+          <el-option label="数据集3" value="fps" />
+          <el-option label="数据集4" value="directory" />
+        </el-select>
+      </el-form-item>
       <el-form-item label="检测模式" prop="mode">
-        <el-select style="margin-right: 10px" v-model="mode" placeholder="请选择检测模式" :disabled="started || loading" @change="true">
+        <el-select style="margin-right: 10px" v-model="mode" placeholder="请选择检测模式" :disabled="started || loading">
           <el-option label="predict" value="predict" />
           <el-option label="video" value="video" />
           <el-option label="fps" value="fps" />
@@ -111,6 +119,7 @@ import type { UploadProps, UploadUserFile, FormInstance, FormRules } from 'eleme
 let ready = 0 //未上传的文件数量
 let adding = 0 //单次添加的文件数量
 const mode = ref('')
+const dataset = ref('')
 const fileList = ref<UploadUserFile[]>([])
 const shas: string[] = []
 //const sliceshas: string[] = []
@@ -392,7 +401,14 @@ const uploadSlices = async () => {
         sha: shas[0],
       })
       if (res.status !== 200) return Promise.reject('error')
-      form.guid = res.data
+      console.log(res.data)
+      form.guid = res.data.guid
+      if(res.data.existed===true){
+        fileList.value[0].percentage = 100
+        fileList.value[0].status = 'success'
+        ElMessage.success('服务器已有相同文件秒传成功')
+        return
+      }
     }
     let i = 0
     const slicesize = 4194304
