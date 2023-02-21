@@ -53,7 +53,7 @@ const nullvalue = [
   { id: 0, mode: '', state: '', time: '' }, //, result: '' },
 ]
 const getpage = async (direction: boolean, lastid: number, step: number) => {
-  return (await axios.get(`/server/History/${direction}/${lastid}/${step}`)).data
+  return (await axios.get(`/server/Record/${direction}/${lastid}/${step}`)).data
 }
 const onRowClick = (row: any) => {
   router.push(`/Record/${row.id}`)

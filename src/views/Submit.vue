@@ -3,12 +3,12 @@
   <el-card shadow="never">
     <h3 style="margin-top: 0px; margin-bottom: 20px">参数设定</h3>
     <el-form ref="formref" :model="form" :rules="rules" label-width="120px" label-position="left">
-      <el-form-item label="数据集" prop="mode">
+      <el-form-item label="数据集" prop="dataset">
         <el-select style="margin-right: 10px" v-model="dataset" placeholder="请选择数据集" :disabled="started || loading">
-          <el-option label="数据集1" value="predict" />
-          <el-option label="数据集2" value="video" />
-          <el-option label="数据集3" value="fps" />
-          <el-option label="数据集4" value="directory" />
+          <el-option label="数据集1" value="dataset1" />
+          <el-option label="数据集2" value="dataset2" />
+          <el-option label="数据集3" value="dataset3" />
+          <el-option label="数据集4" value="dataset4" />
         </el-select>
       </el-form-item>
       <el-form-item label="检测模式" prop="mode">
@@ -58,7 +58,7 @@
     </div>
     <div v-for="(file, index) in fileList" :key="index">
       <el-card v-if="index < shown" shadow="never" class="keepdis">
-        <el-row :gutter="0" style="align-items: center;font-size:14px; ">
+        <el-row :gutter="0" style="align-items: center; font-size: 14px">
           <el-col :xs="4" :sm="3" :md="2" :xl="1">
             <el-button v-if="file.status !== 'success'" type="danger" :icon="Close" @click="handleRemove(index)"></el-button>
           </el-col>
@@ -90,7 +90,6 @@
           <el-col :xs="4" :sm="3" :md="2" :xl="2">{{ countSize(file.size) }}</el-col>
           <el-col :xs="6" :sm="8" :md="10" :xl="12">
             <el-progress
-              class="keepdis"
               style="width: 100%"
               :text-inside="true"
               :stroke-width="18"
@@ -118,6 +117,7 @@ import type { UploadProps, UploadUserFile, FormInstance, FormRules } from 'eleme
 
 let ready = 0 //未上传的文件数量
 let adding = 0 //单次添加的文件数量
+const slicesize = 4194304
 const mode = ref('')
 const dataset = ref('')
 const fileList = ref<UploadUserFile[]>([])
@@ -128,7 +128,7 @@ const loading = ref(false) //是否正在计算文件哈希
 const loadprogress = ref(0) //文件哈希计算总进度
 const started = ref(false) //至少点击过一次上传
 const previewurls = ref<string[]>([]) //上传的文件或视频预览url
-const router=useRouter()
+const router = useRouter()
 const form = reactive({
   //提交的表单数据
   guid: '',
@@ -200,7 +200,7 @@ watch(fileList, async (a, b) => {
         fileList.value.splice(i, 1)
         ElMessage.warning('请勿添加相同文件')
       } else {
-        console.log(a[i].name,fsha)
+        console.log(a[i].name, fsha)
         shas.push(fsha)
         previewurls.value.push(URL.createObjectURL(a[i].raw!))
         shown.value++
@@ -302,13 +302,13 @@ const onSubmit = async (formEl: FormInstance | undefined) => {
         })
         if (res.status !== 200) return Promise.reject('error')
         redirectToHistory(res.data)
-      } catch (e:any) {
-          ElMessage.error(e?.toString())
+      } catch (e: any) {
+        ElMessage.error(e?.toString())
       }
     } else return
   })
 }
-const redirectToHistory = (id:any) => {
+const redirectToHistory = (id: any) => {
   router.push(`/Record/${id}`)
 }
 const countSize = (bytes: any) => {
@@ -360,10 +360,9 @@ const uploadOne = async (i: number, extra: extradata[] = []) => {
     })
     if (res.status !== 200) return Promise.reject('error')
     fileList.value[i].percentage = 100
-    fileList.value[i].status = 'success'
     ready--
     return res.data
-  } catch (e:any) {
+  } catch (e: any) {
     fileList.value[i].percentage = 0
     fileList.value[i].status = 'fail'
     ElMessage.error(e?.toString())
@@ -379,21 +378,22 @@ const uploadFiles = async () => {
       if (res.status !== 200) return Promise.reject('error')
       form.guid = res.data
     }
-  } catch (e:any) {
+  } catch (e: any) {
     ElMessage.error(e?.toString())
   }
   let i = 0
   while (i < fileList.value.length) {
     if (fileList.value[i].status === 'ready') {
-      uploadOne(i, [
-        { name: 'guid', value: form.guid }
-      ])
+      uploadOne(i, [{ name: 'guid', value: form.guid }])
     }
     i++
   }
 }
+let suploaded = 0
 const uploadSlices = async () => {
   try {
+    let i = 0,
+      start = 0
     const file = fileList.value[0].raw as File
     if (form.guid === '') {
       const res = await axios.post(`/server/GetGuid`, {
@@ -403,18 +403,17 @@ const uploadSlices = async () => {
       if (res.status !== 200) return Promise.reject('error')
       console.log(res.data)
       form.guid = res.data.guid
-      if(res.data.existed===true){
+      if (res.data.existed === true) {
         fileList.value[0].percentage = 100
-        fileList.value[0].status = 'success'
         ElMessage.success('服务器已有相同文件秒传成功')
         return
       }
+      i = res.data.start
+      start = i * slicesize
     }
-    let i = 0
-    const slicesize = 4194304
     const total = file.size
-    let start = 0,
-      end = 0
+    let end = 0
+    //fileList.value[0].percentage = +((start / total) * 100).toFixed(2)
     while (start < total) {
       if (start + slicesize < total) end = start + slicesize
       else end = total
@@ -425,30 +424,32 @@ const uploadSlices = async () => {
       fd.append('file', slice)
       fd.append('guid', form.guid)
       fd.append('id', i.toString())
-      const res = await axios.post(`/server/UploadSlice/${end === total}`, fd, {
+      axios.post(`/server/UploadSlice/${end === total}`, fd, {
         headers: {
           'Content-Type': 'multipart/form-data',
         },
+      }).then(()=>{
+        suploaded+=slicesize
+        if(suploaded>(fileList.value[0].size as number)) fileList.value[0].percentage=100
+        else fileList.value[0].percentage = +((suploaded / (fileList.value[0].size as number)) * 100).toFixed(2)
       })
       start = end
-      fileList.value[0].percentage = +((start / total) * 100).toFixed(2)
+      //fileList.value[0].percentage = +((start / total) * 100).toFixed(2)
       i++
     }
-    fileList.value[0].percentage = 100
-    fileList.value[0].status = 'success'
+    //fileList.value[0].percentage = 100
     ready--
-  } catch (e:any) {
+  } catch (e: any) {
     ElMessage.error(e?.toString())
   }
 }
 const getFileSHAProgressive = async (file: Blob, update: boolean = true) => {
   const sha256 = CryptoJS.algo.SHA256.create()
-  const sliceSize = 4194304
   const total = file.size
   let start = 0,
     end = 0
   while (start < total) {
-    if (start + sliceSize < total) end = start + sliceSize
+    if (start + slicesize < total) end = start + slicesize
     else end = total
     const slice = file.slice(start, end)
     const arraybuffer = await slice.arrayBuffer()
@@ -470,5 +471,6 @@ const getFileSHAProgressive = async (file: Blob, update: boolean = true) => {
 .keepdis {
   margin-top: 5px;
   margin-bottom: 5px;
+  text-align: center;
 }
 </style>

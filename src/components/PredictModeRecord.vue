@@ -39,16 +39,16 @@
       </el-descriptions-item>
     </div>
   </el-descriptions>
-  <el-row v-if="record?.mode==='Predict'&&record?.state==='Completed'" style="margin-bottom: 10px">
-      <el-col :span="11">
-        <h3>输入</h3>
-          <el-image :src="`/static${record?.inUrl}`" class="image" fit="contain" />
-      </el-col>
-      <el-col :span="11" :offset="2">
-        <h3>输出</h3>
-          <el-image :src="`/static${record?.outUrl}`" class="image" fit="contain" />
-      </el-col>
-    </el-row>
+  <el-row v-if="record?.mode === 'Predict' && record?.state === 'Completed'" style="margin-bottom: 10px">
+    <el-col :span="11">
+      <h3>输入</h3>
+      <el-image :src="`/static${record?.inUrl}`" class="image" fit="contain" />
+    </el-col>
+    <el-col :span="11" :offset="2">
+      <h3>输出</h3>
+      <el-image :src="`/static${record?.outUrl}`" class="image" fit="contain" />
+    </el-col>
+  </el-row>
 </template>
 <script setup lang="ts">
 interface recordofpredictmode {

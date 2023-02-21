@@ -4,6 +4,7 @@
   <el-result v-if="state==='Waiting'" title="请稍后" sub-title="正在检测中"></el-result>
   <el-result icon="error" v-if="state==='Error'" title="出错了" sub-title="请联系管理员"></el-result>
   <PredictModeRecord v-if="mode==='Predict'" :record="record"></PredictModeRecord>
+  <DirectoryModeRecord v-if="mode==='Directory'" :record="record"></DirectoryModeRecord>
 
     <!-- <div v-if="mode === 'Directory'">
       <el-row v-for="(r, i) in row" style="margin-bottom: 10px">
@@ -56,7 +57,7 @@ const state = ref('')
 let record: any
 const loading = ref(true)
 const gethistory = async () => {
-  return (await axios.get(`/server/History/${id}`)).data
+  return (await axios.get(`/server/Record/${id}`)).data
 }
 onMounted(async () => {
   let res = await gethistory()
@@ -64,7 +65,7 @@ onMounted(async () => {
   loading.value=false
   mode.value = res.mode
   state.value = res.state
-  record=res.record
+  record=res
 })
 </script>
 <style scoped>

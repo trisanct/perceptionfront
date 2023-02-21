@@ -20,7 +20,7 @@
     })
   }
   const task=()=>{
-    axios.get(`/server/TestTask/5`,)
+    axios.get(`/server/TestDask/5`,)
   }
   const task1=()=>{
     axios.get(`/server/TestHistory/1`,)
