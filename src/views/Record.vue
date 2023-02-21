@@ -6,51 +6,14 @@
   <PredictModeRecord v-if="mode==='Predict'" :record="record"></PredictModeRecord>
   <DirectoryModeRecord v-if="mode==='Directory'" :record="record"></DirectoryModeRecord>
 
-    <!-- <div v-if="mode === 'Directory'">
-      <el-row v-for="(r, i) in row" style="margin-bottom: 10px">
-      <el-col v-for="(c, j) in 4" :span="5" :offset="j > 0 ? 1 : 0">
-        <el-card v-if="i * 4 + j < results.length" :body-style="{ padding: '0px' }">
-          <img :src="results[i * 4 + j].url" class="image" fit="contain" />
-          <div style="padding: 14px">
-            <div>{{ results[i * 4 + j].filename }}</div>
-            <div>{{ i }} {{ j }}</div>
-            <div class="bottom">
-              {{ results[i * 4 + j].rate }}
-            </div>
-          </div>
-        </el-card>
-      </el-col>
-    </el-row>
-    </div>-->
 </template>
 <script setup lang="ts">
 import axios from 'axios'
 import { ref, onMounted, provide } from 'vue'
 import { useRouter } from 'vue-router'
-import PredictModeRecord from '@/components/PredictModeRecord.vue';
+import PredictModeRecord from '@/components/PredictModeRecord.vue'
+import DirectoryModeRecord from '@/components/DirectoryModeRecord.vue'
 const router = useRouter()
-// interface recordofpredictmode {
-//   id: number
-//   mode: string
-//   state: string
-//   time: string
-//   filename: string
-//   class: string
-//   score: number
-//   inUrl: string
-//   outUrl: string
-// }
-// interface result {
-//   id: number
-//   filename: string
-//   class: string
-//   score: number
-//   inUrl: string
-//   outUrl: string
-// }
-// const record = ref<record>()
-// const row = ref(2)
-// const mode = ref('predict')
 const id = router.currentRoute.value.params.id
 const mode = ref('')
 const state = ref('')
