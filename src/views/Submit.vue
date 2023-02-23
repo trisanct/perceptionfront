@@ -4,19 +4,16 @@
     <h3 style="margin-top: 0px; margin-bottom: 20px">参数设定</h3>
     <el-form ref="formref" :model="form" :rules="rules" label-width="120px" label-position="left">
       <el-form-item label="数据集" prop="dataset">
-        <el-select style="margin-right: 10px" v-model="dataset" placeholder="请选择数据集" :disabled="started || loading">
-          <el-option label="数据集1" value="dataset1" />
-          <el-option label="数据集2" value="dataset2" />
-          <el-option label="数据集3" value="dataset3" />
-          <el-option label="数据集4" value="dataset4" />
+        <el-select style="margin-right: 10px" v-model="form.dataset" placeholder="请选择数据集" :disabled="started || loading">
+          <el-option v-for="dataset in datasets" :label="dataset.name" :value="dataset.id" />
         </el-select>
       </el-form-item>
       <el-form-item label="检测模式" prop="mode">
         <el-select style="margin-right: 10px" v-model="mode" placeholder="请选择检测模式" :disabled="started || loading">
-          <el-option label="predict" value="predict" />
-          <el-option label="video" value="video" />
-          <el-option label="fps" value="fps" />
-          <el-option label="directory" value="directory" />
+          <el-option label="predict" value="1" />
+          <el-option label="video" value="2" />
+          <el-option label="fps" value="3" />
+          <el-option label="directory" value="4" />
         </el-select>
         选择directory模式可上传多个文件, 选择video或fps模式可上传大于20MB的文件
       </el-form-item>
@@ -109,7 +106,7 @@
 import axios from 'axios'
 import CryptoJS from 'crypto-js'
 import { ElMessage } from 'element-plus'
-import { reactive, ref, watch } from 'vue'
+import { reactive, ref, watch, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { forEach, isUndefined } from 'lodash'
 import { Check, Plus, Upload, Close, View } from '@element-plus/icons-vue'
@@ -119,7 +116,11 @@ let ready = 0 //未上传的文件数量
 let adding = 0 //单次添加的文件数量
 const slicesize = 4194304
 const mode = ref('')
-const dataset = ref('')
+interface idataset{
+  id:number
+  name:string
+}
+const datasets = ref<idataset[]>([])
 const fileList = ref<UploadUserFile[]>([])
 const shas: string[] = []
 //const sliceshas: string[] = []
@@ -131,6 +132,7 @@ const previewurls = ref<string[]>([]) //上传的文件或视频预览url
 const router = useRouter()
 const form = reactive({
   //提交的表单数据
+  dataset: '',
   guid: '',
   cuda: false,
   mode: -1,
@@ -138,7 +140,23 @@ const form = reactive({
   test_interval: 0,
   confidence: 0,
 })
+axios.get(`/server/TrainedDataset`).then((res)=>{
+  datasets.value=res.data
+})
 const formref = ref<FormInstance>()
+// onMounted(async () => {
+//   try{
+//     let res = await gethistory()
+//     console.log(res)
+//     mode.value = res.mode
+//     state.value = res.state
+//     record=res
+//   }catch{
+//     error.value=true
+//   }finally{
+//     loading.value=false
+//   }
+// })
 const validateMode = (rule: any, value: number, callback: any) => {
   if (value < 0 || value > 3) {
     callback(new Error('请选择模式'))

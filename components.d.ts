@@ -43,6 +43,7 @@ declare module '@vue/runtime-core' {
     PredictModeRecord: typeof import('./src/components/PredictModeRecord.vue')['default']
     RouterLink: typeof import('vue-router')['RouterLink']
     RouterView: typeof import('vue-router')['RouterView']
+    VideoModeRecord: typeof import('./src/components/VideoModeRecord.vue')['default']
   }
   export interface ComponentCustomProperties {
     vLoading: typeof import('element-plus/es')['ElLoadingDirective']

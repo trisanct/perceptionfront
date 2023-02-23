@@ -4,7 +4,8 @@ import AboutView from '../views/About.vue'
 import SubmitView from '../views/Submit.vue'
 import HistorysView from '../views/Records.vue'
 import HistoryView from '../views/Record.vue'
-import CreateView from '../views/Create.vue'
+import NewDatasetView from '../views/NewDataset.vue'
+import DatasetsView from '@/views/Datasets.vue'
 
 const router = createRouter({
   history: createWebHistory(import.meta.env.BASE_URL),
@@ -23,9 +24,9 @@ const router = createRouter({
       component: AboutView
     },
     {
-      path:'/Create',
-      name:'Create',
-      component:CreateView
+      path:'/NewDataset',
+      name:'NewDataset',
+      component:NewDatasetView
     },
     {
       path:'/Submit',
@@ -41,7 +42,12 @@ const router = createRouter({
       path:'/Record/:id',
       name:'Record',
       component:HistoryView
-    }
+    },
+    {
+      path:'/Dataset',
+      name:'Datasets',
+      component:DatasetsView
+    },
   ]
 })
 
