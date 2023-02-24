@@ -29,11 +29,8 @@
         :auto-upload="false"
         action="/"
         multiple
-        :on-error="handleError"
       >
-        <el-button style="margin-left: 12px" type="primary" :icon="Plus">
-          选择文件
-        </el-button>
+        <el-button style="margin-left: 12px" type="primary" :icon="Plus">选择文件</el-button>
       </el-upload>
       <el-button style="margin-left: 12px" type="success" :icon="Upload" @click="submitUpload"> 开始上传 </el-button>
       <el-button style="margin-left: 12px" type="info" :icon="QuestionFilled" @click="showinstruction = true">查看说明</el-button>
@@ -197,10 +194,6 @@ const handleRemove = (i: number) => {
   fileList.value.splice(i, 1)
   shas.splice(i, 1)
   previewurls.value.splice(i, 1)
-}
-const handleError: UploadProps['onError'] = (error, file, uploadFiles) => {
-  file.percentage = 0
-  file.status = 'fail'
 }
 const submitUpload = () => {
   //点击上传
