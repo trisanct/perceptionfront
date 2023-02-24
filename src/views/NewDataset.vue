@@ -1,21 +1,22 @@
 <template>
   <h1>新建数据集并训练</h1>
-  <div>{{ fileList.length }}</div>
-  <div>{{ imageList.length }}</div>
-  <div>{{ annotationList.length }}</div>
+  <div>总文件数{{ fileList.length }}</div>
+  <div>图片数{{ imageList.length }}</div>
+  <div>标注数{{ annotationList.length }}</div>
+  <div>行数{{ rowcount }}</div>
   <el-card shadow="never">
     <h3 style="margin-top: 0px; margin-bottom: 20px">参数设定</h3>
     <el-form ref="formref" :model="form" :rules="rules" label-width="120px" label-position="left">
       <el-form-item style="display: none">
         <el-input v-model="form.guid" />
       </el-form-item>
-      <el-form-item label="名称" style="max-width: 500px">
+      <el-form-item label="名称" prop="name" style="max-width: 500px">
         <el-input v-model="form.name" />
       </el-form-item>
-      <el-form-item label="使用GPU训练">
+      <el-form-item label="使用GPU训练" prop="cuda">
         <el-switch v-model="form.cuda" />
       </el-form-item>
-      <el-form-item label="迭代轮数" style="max-width: 500px">
+      <el-form-item label="迭代轮数" prop="epoch" style="max-width: 500px">
         <el-input v-model.number="form.epoch"/>
       </el-form-item>
     </el-form>
@@ -30,31 +31,66 @@
         multiple
         :on-error="handleError"
       >
-        <el-button style="margin-left: 12px" type="primary" :icon="Plus" :loading="loading">
-          {{ loading ? loadprogress.toString().slice(0, 5) + '%' : '选择文件' }}
+        <el-button style="margin-left: 12px" type="primary" :icon="Plus">
+          选择文件
         </el-button>
       </el-upload>
-      <el-button style="margin-left: 12px" type="success" :icon="Upload" :loading="loading" @click="submitUpload"> 开始上传 </el-button>
-      <el-button type="info" :icon="QuestionFilled">查看说明</el-button>
+      <el-button style="margin-left: 12px" type="success" :icon="Upload" @click="submitUpload"> 开始上传 </el-button>
+      <el-button style="margin-left: 12px" type="info" :icon="QuestionFilled" @click="showinstruction = true">查看说明</el-button>
+      <el-dialog v-model="showinstruction" width="50%">
+        <template #header><h3>需要上传的文件及要求</h3></template>
+        <ul>
+          <li>数据集中的图片，文件名任意，扩展名任意</li>
+          <li>图片的标注文件，文件名需要与对应图片相同，扩展名为xml，格式参考下面样例</li>
+          <li>名为classes.txt的病虫害类别文件，用换行分隔</li>
+          <a href="/static/sample.xml">标注文件样例</a>
+        </ul>
+        <template #footer>
+            <el-button type="success" @click="showinstruction = false">
+              我知道了
+            </el-button>
+        </template>
+      </el-dialog>
+
+      <el-button style="margin-left: 12px" type="info" :icon="View" @click="showimages=true">查看已选择的图片</el-button>
+      <el-dialog v-model="showimages" style="height:70%;width:80%">
+        <template #header>查看图片</template>
+        <div style="height:400px;overflow-y:auto;">
+          <el-row v-for="i in rowcount">
+            <el-col v-for="j in 4" :span="6">
+              <el-image
+              v-if="(i-1)*4+j-1<previewurls.length"
+              :src="previewurls[(i-1)*4+j-1]"
+              style="height:200px"
+              fit="contain"
+              :preview-src-list="previewurls"
+              :preview-teleported="true"
+              :initial-index="(i-1)*4+j-1"
+              loading="lazy"></el-image>
+            </el-col>
+          </el-row>
+        </div>
+        <template #footer>
+        </template>
+      </el-dialog>
+
     </div>
     <div style="display: flex;">
-      <el-card style="width:200px;text-align: center;">
+      <el-card shadow="never" style="width:240px;text-align: center;">
         <template #header>
-          <div v-if="imageList.length===0">尚未选择图片文件</div>
-          <div v-else>共计{{ imageList.length }}张图片文件</div>
+          已选择{{ imageList.length }}个图片文件
         </template>
         <el-progress type="circle" :percentage="0" />
       </el-card>
 
-      <el-card style="width:200px;text-align: center;">
+      <el-card shadow="never" style="width:240px;text-align: center;margin-left: 12px">
         <template #header>
-          <div v-if="annotationList.length===0">尚未选择标注文件</div>
-          <div v-else>共计{{ annotationList.length }}张标注文件</div>
+          已选择{{ annotationList.length }}个标注文件
         </template>
         <el-progress type="circle" :percentage="0" />
       </el-card>
 
-      <el-card style="width:200px;text-align: center;">
+      <el-card shadow="never" style="width:240px;text-align: center;margin-left: 12px">
         <template #header>
           <div v-if="classfile === undefined">尚未选择classes.txt</div>
           <div v-else>{{ classfile.name }}</div>
@@ -63,7 +99,7 @@
       </el-card>
     </div>
     <br />
-    <el-button type="success" :icon="Check" :disabled="loading" @click="onSubmit(formref)">提交</el-button>
+    <el-button type="success" :icon="Check" @click="onSubmit(formref)">提交</el-button>
   </el-card>
 </template>
 <script setup lang="ts">
@@ -78,18 +114,18 @@ import type { UploadProps, UploadUserFile, FormInstance, FormRules } from 'eleme
 
 let ready = 0 //未上传的文件数量
 let adding = 0 //单次添加的文件数量
+const showinstruction=ref(false)
+const showimages=ref(false)
 const slicesize = 4194304
 const mode = ref('')
 const dataset = ref('')
 const fileList = ref<UploadUserFile[]>([])
 const imageList = ref<UploadUserFile[]>([])
+const rowcount=ref(0)
 const annotationList = ref<UploadUserFile[]>([])
 const classfile=ref<UploadUserFile>()
 const shas: string[] = []
 //const sliceshas: string[] = []
-const shown = ref(0) //显示的文件数量
-const loading = ref(false) //是否正在计算文件哈希
-const loadprogress = ref(0) //文件哈希计算总进度
 const started = ref(false) //至少点击过一次上传
 const previewurls = ref<string[]>([]) //上传的文件或视频预览url
 const router = useRouter()
@@ -98,11 +134,15 @@ const form = reactive({
   guid: '',
   cuda: false,
   name: '',
-  epoch:100
+  epoch:''
 })
 const formref = ref<FormInstance>()
 const rules = reactive<FormRules>({
-  
+  name: [{ required: true, message: '请输入数据集名称', trigger: 'blur'  }],
+  epoch:[
+    { required: true, message: '请输入迭代轮数', trigger: 'blur'  },
+    {type: 'number', message: '迭代轮数必须是一个数'}
+  ]
 })
 watch(fileList, async (a, b) => {
   //添加文件
@@ -117,6 +157,7 @@ watch(fileList, async (a, b) => {
         }
         if(a[i].raw?.type.includes('image')){
           imageList.value.push(a[i])
+          previewurls.value.push(URL.createObjectURL(a[i].raw!))
         }
         else if(a[i].raw?.type.includes('xml')){
           annotationList.value.push(a[i])
@@ -143,6 +184,7 @@ watch(fileList, async (a, b) => {
       i++
     }
     adding = 0
+    rowcount.value=Math.ceil(imageList.value.length/4)
   }
 })
 const handleRemove = (i: number) => {
@@ -153,7 +195,6 @@ const handleRemove = (i: number) => {
   }
   if (fileList.value[i].status === 'ready') ready--
   fileList.value.splice(i, 1)
-  shown.value--
   shas.splice(i, 1)
   previewurls.value.splice(i, 1)
 }
@@ -167,10 +208,6 @@ const submitUpload = () => {
     ElMessage.warning('图片和标注的数量不一致')
     return
   }
-  if (mode.value === '') {
-    ElMessage.warning('请先选择检测模式')
-    return
-  }
   if (fileList.value.length === 0) {
     ElMessage.warning('请先选择要上传的文件')
     return
@@ -180,18 +217,6 @@ const submitUpload = () => {
     return
   }
   started.value = true
-  if (mode.value === 'predict') {
-    uploadFile() //单传
-    return
-  }
-  if (modeType(mode.value) === 'video') {
-    uploadSlices() //切传
-    return
-  }
-  if (mode.value === 'directory') {
-    uploadFiles() //多传
-    return
-  }
   ElMessage.error('错误')
 }
 const onSubmit = async (formEl: FormInstance | undefined) => {
@@ -229,24 +254,6 @@ const countSize = (bytes: any) => {
     sizes = ['B', 'KB', 'MB', 'GB', 'TB'],
     i = Math.floor(Math.log(bytes) / Math.log(k))
   return (bytes / Math.pow(k, i)).toPrecision(3) + sizes[i]
-}
-const modeType = (mode: string) => {
-  if (mode === 'predict' || mode === 'directory') return 'image'
-  if (mode === 'video' || mode === 'fps') return 'video'
-  return ''
-}
-const modevalue = (mode: string) => {
-  //转换模式字符串到服务端对应的enum值
-  if (mode === 'predict') return 0
-  if (mode === 'video') return 1
-  if (mode === 'fps') return 2
-  if (mode === 'directory') return 3
-  return 9
-}
-const updateLoadProgress = (p: number) => {
-  //更新计算文件哈希进度
-  loading.value = p === 100 ? false : true
-  loadprogress.value = p
 }
 interface extradata {
   name: string
@@ -354,24 +361,6 @@ const uploadSlices = async () => {
   } catch (e: any) {
     ElMessage.error(e?.toString())
   }
-}
-const getFileSHAProgressive = async (file: Blob, update: boolean = true) => {
-  const sha256 = CryptoJS.algo.SHA256.create()
-  const total = file.size
-  let start = 0,
-    end = 0
-  while (start < total) {
-    if (start + slicesize < total) end = start + slicesize
-    else end = total
-    const slice = file.slice(start, end)
-    const arraybuffer = await slice.arrayBuffer()
-    sha256.update(CryptoJS.lib.WordArray.create(arraybuffer))
-    if (update) updateLoadProgress(loadprogress.value + ((end - start) / total / adding) * 100)
-    start = end
-  }
-  let sha: string = sha256.finalize().toString()
-  while (sha.length < 64) sha = '0' + sha
-  return sha
 }
 </script>
 <style scoped>
