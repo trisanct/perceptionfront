@@ -31,7 +31,7 @@ const getdatasets = async () => {
   return (await axios.get(`/server/Dataset`)).data
 }
 const onRowClick = (row: any) => {
-  router.push(`/Record/${row.id}`)
+  router.push(`/Dataset/${row.id}`)
 }
 const onNewClick = () => {
   router.push('/NewDataset')

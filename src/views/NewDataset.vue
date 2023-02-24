@@ -1,5 +1,8 @@
 <template>
   <h1>新建数据集并训练</h1>
+  <div>{{ fileList.length }}</div>
+  <div>{{ imageList.length }}</div>
+  <div>{{ annotationList.length }}</div>
   <el-card shadow="never">
     <h3 style="margin-top: 0px; margin-bottom: 20px">参数设定</h3>
     <el-form ref="formref" :model="form" :rules="rules" label-width="120px" label-position="left">
@@ -9,8 +12,11 @@
       <el-form-item label="名称" style="max-width: 500px">
         <el-input v-model="form.name" />
       </el-form-item>
-      <el-form-item label="使用GPU计算">
+      <el-form-item label="使用GPU训练">
         <el-switch v-model="form.cuda" />
+      </el-form-item>
+      <el-form-item label="迭代轮数" style="max-width: 500px">
+        <el-input v-model.number="form.epoch"/>
       </el-form-item>
     </el-form>
     <el-divider />
@@ -22,7 +28,6 @@
         :auto-upload="false"
         action="/"
         multiple
-        :on-exceed="handleExceed"
         :on-error="handleError"
       >
         <el-button style="margin-left: 12px" type="primary" :icon="Plus" :loading="loading">
@@ -32,48 +37,29 @@
       <el-button style="margin-left: 12px" type="success" :icon="Upload" :loading="loading" @click="submitUpload"> 开始上传 </el-button>
       <el-button type="info" :icon="QuestionFilled">查看说明</el-button>
     </div>
-    <div v-for="(file, index) in fileList" :key="index">
-      <el-card v-if="index < shown" shadow="never" class="keepdis">
-        <el-row :gutter="0" style="align-items: center; font-size: 14px">
-          <el-col :xs="4" :sm="3" :md="2" :xl="1">
-            <el-button v-if="file.status !== 'success'" type="danger" :icon="Close" @click="handleRemove(index)"></el-button>
-          </el-col>
-          <el-col :xs="4" :sm="3" :md="2" :xl="1">
-            <el-popover placement="right" width="auto" trigger="hover">
-              <el-image
-                v-if="modeType(mode) === 'image'"
-                :src="previewurls[index]"
-                style="width: 400px; height: 300px"
-                fit="contain"
-                :preview-teleported="true"
-                :preview-src-list="previewurls"
-                :initial-index="index"
-              />
-              <video v-if="modeType(mode) === 'video'" :src="previewurls[index]" style="width: 800px; height: 450px" controls></video>
-              <template #reference>
-                <el-button type="default" :icon="View"></el-button>
-              </template>
-            </el-popover>
-          </el-col>
-          <el-col :xs="6" :sm="7" :md="8" :xl="8">
-            <el-popover placement="top-start" width="auto" trigger="hover">
-              {{ file.name }}
-              <template #reference>
-                <div style="white-space: nowrap; overflow: hidden; text-overflow: ellipsis">{{ file.name }}</div>
-              </template>
-            </el-popover>
-          </el-col>
-          <el-col :xs="4" :sm="3" :md="2" :xl="2">{{ countSize(file.size) }}</el-col>
-          <el-col :xs="6" :sm="8" :md="10" :xl="12">
-            <el-progress
-              style="width: 100%"
-              :text-inside="true"
-              :stroke-width="18"
-              :percentage="file.percentage"
-              :status="file.percentage === 100 ? 'success' : undefined"
-            />
-          </el-col>
-        </el-row>
+    <div style="display: flex;">
+      <el-card style="width:200px;text-align: center;">
+        <template #header>
+          <div v-if="imageList.length===0">尚未选择图片文件</div>
+          <div v-else>共计{{ imageList.length }}张图片文件</div>
+        </template>
+        <el-progress type="circle" :percentage="0" />
+      </el-card>
+
+      <el-card style="width:200px;text-align: center;">
+        <template #header>
+          <div v-if="annotationList.length===0">尚未选择标注文件</div>
+          <div v-else>共计{{ annotationList.length }}张标注文件</div>
+        </template>
+        <el-progress type="circle" :percentage="0" />
+      </el-card>
+
+      <el-card style="width:200px;text-align: center;">
+        <template #header>
+          <div v-if="classfile === undefined">尚未选择classes.txt</div>
+          <div v-else>{{ classfile.name }}</div>
+        </template>
+        <el-progress type="circle" :percentage="0" />
       </el-card>
     </div>
     <br />
@@ -96,6 +82,9 @@ const slicesize = 4194304
 const mode = ref('')
 const dataset = ref('')
 const fileList = ref<UploadUserFile[]>([])
+const imageList = ref<UploadUserFile[]>([])
+const annotationList = ref<UploadUserFile[]>([])
+const classfile=ref<UploadUserFile>()
 const shas: string[] = []
 //const sliceshas: string[] = []
 const shown = ref(0) //显示的文件数量
@@ -109,84 +98,53 @@ const form = reactive({
   guid: '',
   cuda: false,
   name: '',
+  epoch:100
 })
 const formref = ref<FormInstance>()
-const validateMode = (rule: any, value: number, callback: any) => {
-  if (value < 0 || value > 3) {
-    callback(new Error('请选择模式'))
-  } else {
-    callback()
-  }
-}
-const validateConfidence = (rule: any, value: any, callback: any) => {
-  const pat: RegExp = /0\.\d*[1-9]/
-  if (!pat.test(value)) {
-    callback(new Error('请输入正确的置信度'))
-  } else {
-    callback()
-  }
-}
 const rules = reactive<FormRules>({
-  mode: [{ required: true }, { validator: validateMode, trigger: 'blur' }],
-  fps: [
-    { required: true, message: '请输入视频fps', trigger: 'blur' },
-    { type: 'number', message: 'fps必须是一个数' },
-  ],
-  test_interval: [
-    { required: true, message: '请输入test_interval', trigger: 'blur' },
-    { type: 'number', message: 'test_interval必须是一个数' },
-  ],
-  confidence: [
-    { required: true, message: '请输入置信度', trigger: 'blur' },
-    { validator: validateConfidence, trigger: 'blur' },
-  ],
+  
 })
 watch(fileList, async (a, b) => {
   //添加文件
   if (a.length > b.length) {
-    updateLoadProgress(0)
     adding = a.length - b.length
     let i = b.length
     while (i < a.length) {
-      if (modeType(mode.value) === 'image' && typeof a[i].size !== 'undefined') {
         if ((a[i].size as number) > 20 * 1048576) {
           fileList.value.splice(i, 1)
           ElMessage.warning('请选择小于20MB的文件')
-          break
+          continue
         }
-        if (!a[i].raw?.type.includes('image')) {
+        if(a[i].raw?.type.includes('image')){
+          imageList.value.push(a[i])
+        }
+        else if(a[i].raw?.type.includes('xml')){
+          annotationList.value.push(a[i])
+        }
+        else if(a[i].raw?.type.includes('text/plain')){
+          if(a[i].name==='classes.txt'){
+            if(classfile.value===undefined) classfile.value=a[i]
+            else{
+              const index=fileList.value.findIndex(f=>f.name=='classes.txt')
+              classfile.value=a[i]
+              fileList.value.splice(index,1)
+            }
+          }
+          else{
+            ElMessage.warning('只能选择名为classes.txt的文本文件')
+            continue
+          }
+        }
+        else {
           fileList.value.splice(i, 1)
-          ElMessage.warning('选择的文件不是图片')
-          break
+          ElMessage.warning('选择的文件格式错误')
+          continue
         }
-      }
-      if (modeType(mode.value) === 'video') {
-        if (!a[i].raw?.type.includes('video')) {
-          fileList.value.splice(i, 1)
-          ElMessage.warning('选择的文件不是视频')
-          break
-        }
-      }
-      const fsha = (await getFileSHAProgressive(a[i].raw as File)) as string
-      if (shas.includes(fsha)) {
-        fileList.value.splice(i, 1)
-        ElMessage.warning('请勿添加相同文件')
-      } else {
-        console.log(a[i].name, fsha)
-        shas.push(fsha)
-        previewurls.value.push(URL.createObjectURL(a[i].raw!))
-        shown.value++
-        ready++
-        i++
-      }
+      i++
     }
-    updateLoadProgress(100)
     adding = 0
   }
 })
-const handleExceed: UploadProps['onExceed'] = (files, uploadFiles) => {
-  ElMessage.warning('非directory模式不能添加多个文件')
-}
 const handleRemove = (i: number) => {
   //移除文件
   if (fileList.value[i].status === 'success') {
@@ -205,6 +163,10 @@ const handleError: UploadProps['onError'] = (error, file, uploadFiles) => {
 }
 const submitUpload = () => {
   //点击上传
+  if(imageList.value.length!==annotationList.value.length){
+    ElMessage.warning('图片和标注的数量不一致')
+    return
+  }
   if (mode.value === '') {
     ElMessage.warning('请先选择检测模式')
     return
