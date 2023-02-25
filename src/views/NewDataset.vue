@@ -13,23 +13,19 @@
       <el-form-item label="名称" prop="name" style="max-width: 500px">
         <el-input v-model="form.name" />
       </el-form-item>
+      <el-form-item label="数据增强" prop="augmentation">
+        <el-switch v-model="form.augmentation" />
+      </el-form-item>
       <el-form-item label="使用GPU训练" prop="cuda">
         <el-switch v-model="form.cuda" />
       </el-form-item>
       <el-form-item label="迭代轮数" prop="epoch" style="max-width: 500px">
-        <el-input v-model.number="form.epoch"/>
+        <el-input v-model.number="form.epoch" />
       </el-form-item>
     </el-form>
     <el-divider />
     <div class="card-header">
-      <el-upload
-        ref="uploadref"
-        v-model:file-list="fileList"
-        :show-file-list="false"
-        :auto-upload="false"
-        action="/"
-        multiple
-      >
+      <el-upload ref="uploadref" v-model:file-list="fileList" :show-file-list="false" :auto-upload="false" action="/" multiple>
         <el-button style="margin-left: 12px" type="primary" :icon="Plus">选择文件</el-button>
       </el-upload>
       <el-button style="margin-left: 12px" type="success" :icon="Upload" @click="submitUpload"> 开始上传 </el-button>
@@ -40,57 +36,50 @@
           <li>数据集中的图片，文件名任意，扩展名任意</li>
           <li>图片的标注文件，文件名需要与对应图片相同，扩展名为xml，格式参考下面样例</li>
           <li>名为classes.txt的病虫害类别文件，用换行分隔</li>
-          <a href="/static/sample.xml">标注文件样例</a>
+          <a href="/static/sample.xml" target="view_window">标注文件样例</a>
         </ul>
         <template #footer>
-            <el-button type="success" @click="showinstruction = false">
-              我知道了
-            </el-button>
+          <el-button type="success" @click="showinstruction = false"> 我知道了 </el-button>
         </template>
       </el-dialog>
 
-      <el-button style="margin-left: 12px" type="info" :icon="View" @click="showimages=true">查看已选择的图片</el-button>
-      <el-dialog v-model="showimages" style="height:70%;width:80%">
+      <el-button style="margin-left: 12px" type="info" :icon="View" @click="showimages = true">查看已选择的图片</el-button>
+      <el-dialog v-model="showimages" style="height: 700px; width: 80%">
         <template #header>查看图片</template>
-        <div style="height:400px;overflow-y:auto;">
+        <div style="height: 600px; overflow-y: auto">
           <el-row v-for="i in rowcount">
             <el-col v-for="j in 4" :span="6">
               <el-image
-              v-if="(i-1)*4+j-1<previewurls.length"
-              :src="previewurls[(i-1)*4+j-1]"
-              style="height:200px"
-              fit="contain"
-              :preview-src-list="previewurls"
-              :preview-teleported="true"
-              :initial-index="(i-1)*4+j-1"
-              loading="lazy"></el-image>
+                v-if="(i - 1) * 4 + j - 1 < previewurls.length"
+                :src="previewurls[(i - 1) * 4 + j - 1]"
+                style="height: 200px"
+                fit="contain"
+                :preview-src-list="previewurls"
+                :preview-teleported="true"
+                :initial-index="(i - 1) * 4 + j - 1"
+                loading="lazy"
+              ></el-image>
             </el-col>
           </el-row>
         </div>
-        <template #footer>
-        </template>
+        <template #footer> </template>
       </el-dialog>
-
     </div>
-    <div style="display: flex;">
-      <el-card shadow="never" style="width:240px;text-align: center;">
-        <template #header>
-          已选择{{ imageList.length }}个图片文件
-        </template>
+    <div style="display: flex">
+      <el-card shadow="never" style="width: 240px; text-align: center">
+        <template #header> 已选择{{ imageList.length }}个图片文件 </template>
         <el-progress type="circle" :percentage="0" />
       </el-card>
 
-      <el-card shadow="never" style="width:240px;text-align: center;margin-left: 12px">
-        <template #header>
-          已选择{{ annotationList.length }}个标注文件
-        </template>
+      <el-card shadow="never" style="width: 240px; text-align: center; margin-left: 12px">
+        <template #header> 已选择{{ annotationList.length }}个标注文件 </template>
         <el-progress type="circle" :percentage="0" />
       </el-card>
 
-      <el-card shadow="never" style="width:240px;text-align: center;margin-left: 12px">
+      <el-card shadow="never" style="width: 240px; text-align: center; margin-left: 12px">
         <template #header>
           <div v-if="classfile === undefined">尚未选择classes.txt</div>
-          <div v-else>{{ classfile.name }}</div>
+          <div v-else>已选择classes.txt</div>
         </template>
         <el-progress type="circle" :percentage="0" />
       </el-card>
@@ -101,26 +90,24 @@
 </template>
 <script setup lang="ts">
 import axios from 'axios'
-import CryptoJS from 'crypto-js'
 import { ElMessage } from 'element-plus'
 import { reactive, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
-import { forEach, isUndefined } from 'lodash'
+import { forEach, isUndefined, reverse } from 'lodash'
 import { Check, Plus, Upload, Close, View, QuestionFilled } from '@element-plus/icons-vue'
 import type { UploadProps, UploadUserFile, FormInstance, FormRules } from 'element-plus'
 
 let ready = 0 //未上传的文件数量
 let adding = 0 //单次添加的文件数量
-const showinstruction=ref(false)
-const showimages=ref(false)
+const showinstruction = ref(false)
+const showimages = ref(false)
 const slicesize = 4194304
 const mode = ref('')
-const dataset = ref('')
 const fileList = ref<UploadUserFile[]>([])
 const imageList = ref<UploadUserFile[]>([])
-const rowcount=ref(0)
+const rowcount = ref(0)
 const annotationList = ref<UploadUserFile[]>([])
-const classfile=ref<UploadUserFile>()
+const classfile = ref<UploadUserFile>()
 const shas: string[] = []
 //const sliceshas: string[] = []
 const started = ref(false) //至少点击过一次上传
@@ -129,75 +116,93 @@ const router = useRouter()
 const form = reactive({
   //提交的表单数据
   guid: '',
+  augmentation: false,
   cuda: false,
   name: '',
-  epoch:''
+  epoch: '',
 })
 const formref = ref<FormInstance>()
 const rules = reactive<FormRules>({
-  name: [{ required: true, message: '请输入数据集名称', trigger: 'blur'  }],
-  epoch:[
-    { required: true, message: '请输入迭代轮数', trigger: 'blur'  },
-    {type: 'number', message: '迭代轮数必须是一个数'}
-  ]
+  name: [{ required: true, message: '请输入数据集名称', trigger: 'blur' }],
+  augmentation: [{ required: true, message: '', trigger: 'blur' }],
+  cuda: [{ required: true, message: '', trigger: 'blur' }],
+  epoch: [
+    { required: true, message: '请输入迭代轮数', trigger: 'blur' },
+    { type: 'number', message: '迭代轮数必须是一个数' },
+  ],
 })
 watch(fileList, async (a, b) => {
   //添加文件
-  if (a.length > b.length) {
-    adding = a.length - b.length
-    let i = b.length
-    while (i < a.length) {
-        if ((a[i].size as number) > 20 * 1048576) {
-          fileList.value.splice(i, 1)
-          ElMessage.warning('请选择小于20MB的文件')
-          continue
-        }
-        if(a[i].raw?.type.includes('image')){
-          imageList.value.push(a[i])
-          previewurls.value.push(URL.createObjectURL(a[i].raw!))
-        }
-        else if(a[i].raw?.type.includes('xml')){
-          annotationList.value.push(a[i])
-        }
-        else if(a[i].raw?.type.includes('text/plain')){
-          if(a[i].name==='classes.txt'){
-            if(classfile.value===undefined) classfile.value=a[i]
-            else{
-              const index=fileList.value.findIndex(f=>f.name=='classes.txt')
-              classfile.value=a[i]
-              fileList.value.splice(index,1)
-            }
-          }
-          else{
-            ElMessage.warning('只能选择名为classes.txt的文本文件')
-            continue
-          }
-        }
-        else {
-          fileList.value.splice(i, 1)
-          ElMessage.warning('选择的文件格式错误')
-          continue
-        }
-      i++
+  // if (a.length > b.length) {
+  //   adding = a.length - b.length
+  //   let i = b.length
+  //   while (i < a.length) {
+  //       if ((a[i].size as number) > 20 * 1048576) {
+  //         fileList.value.splice(i, 1)
+  //         ElMessage.warning('请选择小于20MB的文件')
+  //         continue
+  //       }
+  //       if(a[i].raw?.type.includes('image')){
+  //         imageList.value.push(a[i])
+  //         previewurls.value.push(URL.createObjectURL(a[i].raw!))
+  //       }
+  //       else if(a[i].raw?.type.includes('xml')){
+  //         annotationList.value.push(a[i])
+  //       }
+  //       else if(a[i].raw?.type.includes('text/plain')){
+  //         if(a[i].name==='classes.txt'){
+  //           if(classfile.value===undefined) classfile.value=a[i]
+  //           else{
+  //             const index=fileList.value.findIndex(f=>f.name=='classes.txt')
+  //             classfile.value=a[i]
+  //             fileList.value.splice(index,1)
+  //           }
+  //         }
+  //         else{
+  //           fileList.value.splice(i, 1)
+  //           ElMessage.warning('只能选择名为classes.txt的文本文件')
+  //           continue
+  //         }
+  //       }
+  //       else {
+  //         fileList.value.splice(i, 1)
+  //         ElMessage.warning('选择的文件格式错误')
+  //         continue
+  //       }
+  //     i++
+  //   }
+  //   adding = 0
+  //   rowcount.value=Math.ceil(imageList.value.length/4)
+  // }
+  reverse(fileList.value)
+  while (fileList.value.length > 0) {
+    let currentfile = fileList.value.pop()
+    if ((currentfile?.size as number) > 20 * 1048576) {
+      ElMessage.warning('请选择小于20MB的文件')
+      continue
     }
-    adding = 0
-    rowcount.value=Math.ceil(imageList.value.length/4)
+    if (currentfile?.raw?.type.includes('image')) {
+      imageList.value.push(currentfile)
+      previewurls.value.push(URL.createObjectURL(currentfile?.raw!))
+    } else if (currentfile?.raw?.type.includes('xml')) {
+      annotationList.value.push(currentfile)
+    } else if (currentfile?.raw?.type.includes('text/plain')) {
+      if (currentfile?.name === 'classes.txt') {
+        classfile.value = currentfile
+      } else {
+        ElMessage.warning('只能选择名为classes.txt的文本文件')
+        continue
+      }
+    } else {
+      ElMessage.warning('选择的文件格式错误')
+      continue
+    }
   }
+  rowcount.value=Math.ceil(imageList.value.length/4)
 })
-const handleRemove = (i: number) => {
-  //移除文件
-  if (fileList.value[i].status === 'success') {
-    ElMessage.warning('无法移除已上传的文件')
-    return
-  }
-  if (fileList.value[i].status === 'ready') ready--
-  fileList.value.splice(i, 1)
-  shas.splice(i, 1)
-  previewurls.value.splice(i, 1)
-}
 const submitUpload = () => {
   //点击上传
-  if(imageList.value.length!==annotationList.value.length){
+  if (imageList.value.length !== annotationList.value.length) {
     ElMessage.warning('图片和标注的数量不一致')
     return
   }
@@ -226,7 +231,7 @@ const onSubmit = async (formEl: FormInstance | undefined) => {
         const res = await axios.post(`/server/Submit`, {
           guid: form.guid,
           cuda: form.cuda,
-          name: form.name
+          name: form.name,
         })
         if (res.status !== 200) return Promise.reject('error')
         redirectToHistory(res.data)
@@ -297,62 +302,6 @@ const uploadFiles = async () => {
       uploadOne(i, [{ name: 'guid', value: form.guid }])
     }
     i++
-  }
-}
-let suploaded = 0
-const uploadSlices = async () => {
-  try {
-    let i = 0,
-      start = 0
-    const file = fileList.value[0].raw as File
-    if (form.guid === '') {
-      const res = await axios.post(`/server/GetGuid`, {
-        filename: file.name,
-        sha: shas[0],
-      })
-      if (res.status !== 200) return Promise.reject('error')
-      console.log(res.data)
-      form.guid = res.data.guid
-      if (res.data.existed === true) {
-        fileList.value[0].percentage = 100
-        ElMessage.success('服务器已有相同文件秒传成功')
-        return
-      }
-      i = res.data.start
-      start = i * slicesize
-    }
-    const total = file.size
-    let end = 0
-    //fileList.value[0].percentage = +((start / total) * 100).toFixed(2)
-    while (start < total) {
-      if (start + slicesize < total) end = start + slicesize
-      else end = total
-      const slice = file.slice(start, end)
-      //let sha = CryptoJS.SHA256(CryptoJS.lib.WordArray.create(await slice.arrayBuffer()))
-      //while (sha.length < 64) sha = '0' + sha
-      const fd = new FormData()
-      fd.append('file', slice)
-      fd.append('guid', form.guid)
-      fd.append('id', i.toString())
-      axios
-        .post(`/server/UploadSlice/${end === total}`, fd, {
-          headers: {
-            'Content-Type': 'multipart/form-data',
-          },
-        })
-        .then(() => {
-          suploaded += slicesize
-          if (suploaded > (fileList.value[0].size as number)) fileList.value[0].percentage = 100
-          else fileList.value[0].percentage = +((suploaded / (fileList.value[0].size as number)) * 100).toFixed(2)
-        })
-      start = end
-      //fileList.value[0].percentage = +((start / total) * 100).toFixed(2)
-      i++
-    }
-    //fileList.value[0].percentage = 100
-    ready--
-  } catch (e: any) {
-    ElMessage.error(e?.toString())
   }
 }
 </script>

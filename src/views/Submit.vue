@@ -3,17 +3,17 @@
   <el-card shadow="never">
     <h3 style="margin-top: 0px; margin-bottom: 20px">参数设定</h3>
     <el-form ref="formref" :model="form" :rules="rules" label-width="120px" label-position="left">
-      <el-form-item label="数据集" prop="dataset">
-        <el-select style="margin-right: 10px" v-model="form.dataset" placeholder="请选择数据集" :disabled="started || loading">
+      <el-form-item label="数据集" prop="datasetid">
+        <el-select style="margin-right: 10px" v-model="form.datasetid" placeholder="请选择数据集" :disabled="started || loading">
           <el-option v-for="dataset in datasets" :label="dataset.name" :value="dataset.id" />
         </el-select>
       </el-form-item>
       <el-form-item label="检测模式" prop="mode">
         <el-select style="margin-right: 10px" v-model="mode" placeholder="请选择检测模式" :disabled="started || loading">
-          <el-option label="predict" value="1" />
-          <el-option label="video" value="2" />
-          <el-option label="fps" value="3" />
-          <el-option label="directory" value="4" />
+          <el-option label="predict" value="predict" />
+          <el-option label="video" value="video" />
+          <el-option label="fps" value="fps" />
+          <el-option label="directory" value="directory" />
         </el-select>
         选择directory模式可上传多个文件, 选择video或fps模式可上传大于20MB的文件
       </el-form-item>
@@ -29,7 +29,7 @@
       <el-form-item label="帧率检测次数" v-if="mode === 'fps'" prop="test_interval" style="max-width: 500px">
         <el-input v-model.number="form.test_interval" />
       </el-form-item>
-      <el-form-item label="置信度" v-if="mode !== 'fps'" prop="confidence" style="max-width: 500px">
+      <el-form-item label="最低置信度" v-if="mode !== 'fps'" prop="confidence" style="max-width: 500px">
         <el-input v-model="form.confidence" />
       </el-form-item>
     </el-form>
@@ -132,7 +132,7 @@ const previewurls = ref<string[]>([]) //上传的文件或视频预览url
 const router = useRouter()
 const form = reactive({
   //提交的表单数据
-  dataset: '',
+  datasetid: '',
   guid: '',
   cuda: false,
   mode: -1,
@@ -144,19 +144,6 @@ axios.get(`/server/TrainedDataset`).then((res)=>{
   datasets.value=res.data
 })
 const formref = ref<FormInstance>()
-// onMounted(async () => {
-//   try{
-//     let res = await gethistory()
-//     console.log(res)
-//     mode.value = res.mode
-//     state.value = res.state
-//     record=res
-//   }catch{
-//     error.value=true
-//   }finally{
-//     loading.value=false
-//   }
-// })
 const validateMode = (rule: any, value: number, callback: any) => {
   if (value < 0 || value > 3) {
     callback(new Error('请选择模式'))
@@ -173,6 +160,7 @@ const validateConfidence = (rule: any, value: any, callback: any) => {
   }
 }
 const rules = reactive<FormRules>({
+  datasetid: [{ required: true, message: '请选择数据集', trigger: 'blur' }],
   mode: [{ required: true }, { validator: validateMode, trigger: 'blur' }],
   fps: [
     { required: true, message: '请输入视频fps', trigger: 'blur' },
@@ -313,6 +301,7 @@ const onSubmit = async (formEl: FormInstance | undefined) => {
         const res = await axios.post(`/server/Submit`, {
           mode: form.mode,
           guid: form.guid,
+          datasetid: form.datasetid,
           cuda: form.cuda,
           confidence: form.confidence,
           fps: form.fps,
