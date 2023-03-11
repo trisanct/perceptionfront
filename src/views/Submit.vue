@@ -116,9 +116,9 @@ let ready = 0 //未上传的文件数量
 let adding = 0 //单次添加的文件数量
 const slicesize = 4194304
 const mode = ref('')
-interface idataset{
-  id:number
-  name:string
+interface idataset {
+  id: number
+  name: string
 }
 const datasets = ref<idataset[]>([])
 const fileList = ref<UploadUserFile[]>([])
@@ -140,8 +140,8 @@ const form = reactive({
   test_interval: 0,
   confidence: 0,
 })
-axios.get(`/server/TrainedDataset`).then((res)=>{
-  datasets.value=res.data
+axios.get(`/server/TrainedDataset`).then((res) => {
+  datasets.value = res.data
 })
 const formref = ref<FormInstance>()
 const validateMode = (rule: any, value: number, callback: any) => {
@@ -308,6 +308,7 @@ const onSubmit = async (formEl: FormInstance | undefined) => {
           interval: form.test_interval,
         })
         if (res.status !== 200) return Promise.reject('error')
+        ElMessage.success('提交成功')
         redirectToHistory(res.data)
       } catch (e: any) {
         ElMessage.error(e?.toString())
@@ -431,15 +432,17 @@ const uploadSlices = async () => {
       fd.append('file', slice)
       fd.append('guid', form.guid)
       fd.append('id', i.toString())
-      axios.post(`/server/UploadSlice/${end === total}`, fd, {
-        headers: {
-          'Content-Type': 'multipart/form-data',
-        },
-      }).then(()=>{
-        suploaded+=slicesize
-        if(suploaded>(fileList.value[0].size as number)) fileList.value[0].percentage=100
-        else fileList.value[0].percentage = +((suploaded / (fileList.value[0].size as number)) * 100).toFixed(2)
-      })
+      axios
+        .post(`/server/UploadSlice/${end === total}`, fd, {
+          headers: {
+            'Content-Type': 'multipart/form-data',
+          },
+        })
+        .then(() => {
+          suploaded += slicesize
+          if (suploaded > (fileList.value[0].size as number)) fileList.value[0].percentage = 100
+          else fileList.value[0].percentage = +((suploaded / (fileList.value[0].size as number)) * 100).toFixed(2)
+        })
       start = end
       //fileList.value[0].percentage = +((start / total) * 100).toFixed(2)
       i++

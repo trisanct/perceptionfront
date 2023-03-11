@@ -5,7 +5,7 @@
     <el-button @click="hello">测试服务器是否连通</el-button>
     <h2>{{msg}}</h2>
     <el-button @click="task">测试试验任务队列</el-button>
-    <el-button @click="task1">测试正常任务队列</el-button>
+    <el-button @click="task1">测试训练任务队列</el-button>
     
     
   </div>
@@ -23,6 +23,6 @@
     axios.get(`/server/TestDask/13`,)
   }
   const task1=()=>{
-    axios.get(`/server/TestHistory/1`,)
+    axios.get(`/server/TestTrain/3`,)
   }
 </script>
