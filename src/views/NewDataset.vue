@@ -16,9 +16,6 @@
       <el-form-item label="数据增强" prop="augmentation">
         <el-switch v-model="form.augmentation" />
       </el-form-item>
-      <el-form-item label="使用GPU训练" prop="cuda">
-        <el-switch v-model="form.cuda" />
-      </el-form-item>
       <el-form-item label="迭代轮数" prop="epoch" style="max-width: 500px">
         <el-input v-model.number="form.epoch" />
       </el-form-item>
@@ -53,11 +50,11 @@
                 v-if="(i - 1) * 4 + j - 1 < previewurls.length"
                 :src="previewurls[(i - 1) * 4 + j - 1]"
                 style="height: 200px"
+                loading="lazy"
                 fit="contain"
                 :preview-src-list="previewurls"
                 :preview-teleported="true"
                 :initial-index="(i - 1) * 4 + j - 1"
-                loading="lazy"
               ></el-image>
             </el-col>
           </el-row>
@@ -66,22 +63,22 @@
       </el-dialog>
     </div>
     <div style="display: flex">
-      <el-card shadow="never" style="width: 240px; text-align: center">
-        <template #header> 已选择{{ imageList.length }}个图片文件 </template>
-        <el-progress type="circle" :percentage="0" />
+      <el-card shadow="never" style="width: 280px; text-align: center">
+        <template #header> 已选择{{ imageList.length }}个图片文件 {{ countSize(sumsize) }}</template>
+        <el-progress type="circle" :percentage="imagepercentage" :status="imagestatus" />
       </el-card>
 
-      <el-card shadow="never" style="width: 240px; text-align: center; margin-left: 12px">
+      <el-card shadow="never" style="width: 280px; text-align: center; margin-left: 12px">
         <template #header> 已选择{{ annotationList.length }}个标注文件 </template>
-        <el-progress type="circle" :percentage="0" />
+        <el-progress type="circle" :percentage="annotationpercentage" :status="annotationstatus" />
       </el-card>
 
-      <el-card shadow="never" style="width: 240px; text-align: center; margin-left: 12px">
+      <el-card shadow="never" style="width: 280px; text-align: center; margin-left: 12px">
         <template #header>
-          <div v-if="classfile === undefined">尚未选择classes.txt</div>
+          <div v-if="classfile.length === 0">尚未选择classes.txt</div>
           <div v-else>已选择classes.txt</div>
         </template>
-        <el-progress type="circle" :percentage="0" />
+        <el-progress type="circle" :percentage="classspercentage" />
       </el-card>
     </div>
     <br />
@@ -91,36 +88,41 @@
 <script setup lang="ts">
 import axios from 'axios'
 import { ElMessage } from 'element-plus'
-import { reactive, ref, watch } from 'vue'
+import { reactive, ref, watch, computed } from 'vue'
 import { useRouter } from 'vue-router'
-import { forEach, isUndefined, reverse } from 'lodash'
+import { assign, forEach, isUndefined, reverse } from 'lodash'
 import { Check, Plus, Upload, Close, View, QuestionFilled } from '@element-plus/icons-vue'
 import type { UploadProps, UploadUserFile, FormInstance, FormRules } from 'element-plus'
 
-let ready = 0 //未上传的文件数量
-let adding = 0 //单次添加的文件数量
+const roundcount = 500
 const showinstruction = ref(false)
 const showimages = ref(false)
-const slicesize = 4194304
-const mode = ref('')
+const sumsize = ref(0)
+const uploadedimagecount = ref(0)
+const uploadedannotationcount = ref(0)
 const fileList = ref<UploadUserFile[]>([])
-const imageList = ref<UploadUserFile[]>([])
+const imageList = ref<File[]>([])
 const rowcount = ref(0)
-const annotationList = ref<UploadUserFile[]>([])
-const classfile = ref<UploadUserFile>()
-const shas: string[] = []
-//const sliceshas: string[] = []
-const started = ref(false) //至少点击过一次上传
+const annotationList = ref<File[]>([])
+const classfile = ref<File[]>([])
 const previewurls = ref<string[]>([]) //上传的文件或视频预览url
 const router = useRouter()
 const form = reactive({
   //提交的表单数据
   guid: '',
   augmentation: false,
-  cuda: false,
   name: '',
   epoch: '',
 })
+const imagepercentage = computed(() => (imageList.value.length === 0 ? 0 : +((uploadedimagecount.value / imageList.value.length) * 100).toFixed(2)))
+const imagestatus = computed(() => (imageList.value.length !== 0 && uploadedimagecount.value === imageList.value.length ? 'success' : undefined))
+const annotationpercentage = computed(() =>
+  annotationList.value.length === 0 ? 0 : +((uploadedannotationcount.value / annotationList.value.length) * 100).toFixed(2)
+)
+const annotationstatus = computed(() =>
+  annotationList.value.length !== 0 && uploadedannotationcount.value === annotationList.value.length ? 'success' : undefined
+)
+const classspercentage = ref(0)
 const formref = ref<FormInstance>()
 const rules = reactive<FormRules>({
   name: [{ required: true, message: '请输入数据集名称', trigger: 'blur' }],
@@ -133,47 +135,6 @@ const rules = reactive<FormRules>({
 })
 watch(fileList, async (a, b) => {
   //添加文件
-  // if (a.length > b.length) {
-  //   adding = a.length - b.length
-  //   let i = b.length
-  //   while (i < a.length) {
-  //       if ((a[i].size as number) > 20 * 1048576) {
-  //         fileList.value.splice(i, 1)
-  //         ElMessage.warning('请选择小于20MB的文件')
-  //         continue
-  //       }
-  //       if(a[i].raw?.type.includes('image')){
-  //         imageList.value.push(a[i])
-  //         previewurls.value.push(URL.createObjectURL(a[i].raw!))
-  //       }
-  //       else if(a[i].raw?.type.includes('xml')){
-  //         annotationList.value.push(a[i])
-  //       }
-  //       else if(a[i].raw?.type.includes('text/plain')){
-  //         if(a[i].name==='classes.txt'){
-  //           if(classfile.value===undefined) classfile.value=a[i]
-  //           else{
-  //             const index=fileList.value.findIndex(f=>f.name=='classes.txt')
-  //             classfile.value=a[i]
-  //             fileList.value.splice(index,1)
-  //           }
-  //         }
-  //         else{
-  //           fileList.value.splice(i, 1)
-  //           ElMessage.warning('只能选择名为classes.txt的文本文件')
-  //           continue
-  //         }
-  //       }
-  //       else {
-  //         fileList.value.splice(i, 1)
-  //         ElMessage.warning('选择的文件格式错误')
-  //         continue
-  //       }
-  //     i++
-  //   }
-  //   adding = 0
-  //   rowcount.value=Math.ceil(imageList.value.length/4)
-  // }
   reverse(fileList.value)
   while (fileList.value.length > 0) {
     let currentfile = fileList.value.pop()
@@ -182,13 +143,15 @@ watch(fileList, async (a, b) => {
       continue
     }
     if (currentfile?.raw?.type.includes('image')) {
-      imageList.value.push(currentfile)
+      sumsize.value += currentfile?.size as number
+      imageList.value.push(currentfile.raw)
       previewurls.value.push(URL.createObjectURL(currentfile?.raw!))
     } else if (currentfile?.raw?.type.includes('xml')) {
-      annotationList.value.push(currentfile)
+      annotationList.value.push(currentfile.raw)
     } else if (currentfile?.raw?.type.includes('text/plain')) {
       if (currentfile?.name === 'classes.txt') {
-        classfile.value = currentfile
+        classfile.value.pop()
+        classfile.value.push(currentfile.raw)
       } else {
         ElMessage.warning('只能选择名为classes.txt的文本文件')
         continue
@@ -198,24 +161,75 @@ watch(fileList, async (a, b) => {
       continue
     }
   }
-  rowcount.value=Math.ceil(imageList.value.length/4)
+  rowcount.value = Math.ceil(imageList.value.length / 4)
 })
-const submitUpload = () => {
+const submitUpload = async () => {
   //点击上传
+  if (imageList.value.length === 0 || classfile.value === undefined) {
+    ElMessage.warning('请先按要求选择要上传的文件')
+    return
+  }
   if (imageList.value.length !== annotationList.value.length) {
     ElMessage.warning('图片和标注的数量不一致')
     return
   }
-  if (fileList.value.length === 0) {
-    ElMessage.warning('请先选择要上传的文件')
-    return
+  try {
+    if (form.guid === '') {
+      const res = await axios.get(`/server/GetGuid`)
+      if (res.status !== 200) throw new Error(res.status + res.statusText)
+      //console.log(res.data)
+      form.guid = res.data
+    }
+    //发送img
+    const rounds = Math.ceil(imageList.value.length / roundcount)
+    //console.log(rounds)
+    for (let i = 0; i < rounds; i++) {
+      let start = i * roundcount
+      let end = start + roundcount
+      if (end > imageList.value.length) end = imageList.value.length
+      //console.log(start, end)
+      const roundimages = imageList.value.slice(start, end - 1)
+      roundimages.forEach((image) => {
+        uploadOneThen(image)?.then(() => {
+          uploadedimagecount.value++
+        })
+      })
+      await uploadOne(imageList.value[end - 1])
+      uploadedimagecount.value++
+    }
+    //发送xml
+    {
+      const rounds = Math.ceil(annotationList.value.length / roundcount)
+      for (let i = 0; i < rounds; i++) {
+        let start = i * roundcount
+        let end = start + roundcount
+        if (end > annotationList.value.length) end = annotationList.value.length
+        //console.log(start, end)
+        const roundannotation = annotationList.value.slice(start, end)
+        const fd = new FormData()
+        roundannotation.forEach((annotation) => {
+          fd.append('file', annotation)
+        })
+        fd.append('guid', form.guid)
+        const res = await axios.post(`/server/UploadDatasetXMLFiles`, fd, {
+          headers: {
+            'Content-Type': 'multipart/form-data',
+          },
+        })
+        if (res.status !== 200) return Promise.reject('error')
+        uploadedannotationcount.value = end
+      }
+    }
+    //发送classes.txt
+    {
+      console.log(form.guid)
+      console.log(classfile.value)
+      await uploadOne(classfile.value[0])
+      classspercentage.value=100
+    }
+  } catch (e: any) {
+    ElMessage.error(e?.toString())
   }
-  if (ready === 0) {
-    ElMessage.warning('没有需要上传的文件')
-    return
-  }
-  started.value = true
-  ElMessage.error('错误')
 }
 const onSubmit = async (formEl: FormInstance | undefined) => {
   //点击提交
@@ -224,25 +238,23 @@ const onSubmit = async (formEl: FormInstance | undefined) => {
     if (valid) {
       //to be done
       try {
-        if (fileList.value.length === 0 || ready !== 0) {
-          ElMessage.warning('请在文件上传完成后再提交')
-          return
-        }
-        const res = await axios.post(`/server/Submit`, {
+        const res = await axios.post(`/server/SubmitDataset`, {
           guid: form.guid,
-          cuda: form.cuda,
           name: form.name,
+          augmentation: form.augmentation,
+          epoch:form.epoch
         })
         if (res.status !== 200) return Promise.reject('error')
-        redirectToHistory(res.data)
+        ElMessage.success('提交成功')
+        redirectToDataset(res.data)
       } catch (e: any) {
         ElMessage.error(e?.toString())
       }
     } else return
   })
 }
-const redirectToHistory = (id: any) => {
-  router.push(`/Record/${id}`)
+const redirectToDataset = (id: any) => {
+  router.push(`/Dataset/${id}`)
 }
 const countSize = (bytes: any) => {
   //显示文件大小
@@ -257,51 +269,41 @@ interface extradata {
   name: string
   value: string
 }
-const uploadOne = async (i: number, extra: extradata[] = []) => {
-  try {
-    fileList.value[i].status = 'uploading'
-    const fd = new FormData()
-    fd.append('file', fileList.value[i].raw as File)
-    fd.append('sha', shas[i])
-    if (extra.length !== 0) {
-      forEach(extra, (e) => {
-        fd.append(e.name, e.value)
-      })
-    }
-    const res = await axios.post(`/server/UploadFile/${mode.value}`, fd, {
+const uploadOneThen = (file: File) => {
+  const fd = new FormData()
+  fd.append('file', file)
+  fd.append('guid', form.guid)
+  return axios
+    .post(`/server/UploadDatasetFile`, fd, {
       headers: {
         'Content-Type': 'multipart/form-data',
       },
     })
-    if (res.status !== 200) return Promise.reject('error')
-    fileList.value[i].percentage = 100
-    ready--
-    return res.data
-  } catch (e: any) {
-    fileList.value[i].percentage = 0
-    fileList.value[i].status = 'fail'
-    ElMessage.error(e?.toString())
-  }
+    .then((res) => {
+      if (res.status !== 200) return Promise.reject(res.status + res.statusText)
+      //uploadedimagecount.value++
+    })
 }
-const uploadFile = async () => {
-  form.guid = await uploadOne(0)
-}
-const uploadFiles = async () => {
+const uploadOne = async (file: File) => {
   try {
-    if (form.guid === '') {
-      const res = await axios.get(`/server/GetGuid`)
-      if (res.status !== 200) return Promise.reject('error')
-      form.guid = res.data
-    }
+    const fd = new FormData()
+    fd.append('file', file)
+    fd.append('guid', form.guid)
+    const res = await axios.post(`/server/UploadDatasetFile`, fd, {
+      headers: {
+        'Content-Type': 'multipart/form-data',
+      },
+    })
+    return new Promise((resolve, reject) => {
+      if (res.status === 200) {
+        resolve(res.data)
+      } else {
+        reject(res.status + res.statusText)
+      }
+    })
   } catch (e: any) {
-    ElMessage.error(e?.toString())
-  }
-  let i = 0
-  while (i < fileList.value.length) {
-    if (fileList.value[i].status === 'ready') {
-      uploadOne(i, [{ name: 'guid', value: form.guid }])
-    }
-    i++
+    ElMessage.error(e.message)
+    console.log(e)
   }
 }
 </script>
